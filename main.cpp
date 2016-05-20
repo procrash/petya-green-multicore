@@ -1,3 +1,7 @@
+#include <boost/thread.hpp>
+#include <boost/container/vector.hpp>
+
+
 #include <stdio.h>
 #include <string.h>
 
@@ -9,7 +13,12 @@
 
 #define VERBOSE 0
 
-bool make_random_key(char* key)
+
+#include <iostream>
+
+using namespace std;
+
+void make_random_key(char* key)
 {
     size_t charset_len = strlen(KEY_CHARSET);
 
@@ -22,6 +31,89 @@ bool make_random_key(char* key)
         key[i+1] = KEY_CHARSET[rand_i2];
     }
     key[KEY_SIZE] = 0;
+}
+
+long nrOfKeysSearched = 0;
+char* veribuf;
+char* nonce;
+
+bool keyFound = false;
+
+void tryKey(char *key) {
+      bool veribufIsValid = false;
+      char veribuf_test[VERIBUF_SIZE];
+      
+      memcpy(veribuf_test, veribuf, VERIBUF_SIZE);
+      
+      if (s20_crypt((uint8_t *) key, S20_KEYLEN_128, (uint8_t *) nonce, 0, (uint8_t *) veribuf_test, VERIBUF_SIZE) == S20_FAILURE) {
+          puts("Error: encryption failed");
+          return;
+      }
+      veribufIsValid = is_valid(veribuf_test);
+      
+      if (veribufIsValid) {
+        printf("[+] %s is a valid key!\n", key);
+        return;
+      } else {
+        printf("[-] %s is NOT a valid key!\n", key);
+      }
+}
+
+
+void tryKeyRandom() {
+
+        boost::posix_time::time_duration duration;
+        boost::posix_time::ptime beginTs = boost::posix_time::second_clock::local_time();
+        
+
+        char veribuf_test[VERIBUF_SIZE];
+
+        char p_key[KEY_SIZE+1];
+        char *key = p_key;
+        
+        bool veribufIsValid = false;
+        bool matches = false;
+          
+        do {
+                    
+            
+            memcpy(veribuf_test, veribuf, VERIBUF_SIZE);
+            matches = false;
+            
+            make_random_key(key);
+    
+            if (s20_crypt((uint8_t *) key, S20_KEYLEN_128, (uint8_t *) nonce, 0, (uint8_t *) veribuf_test, VERIBUF_SIZE) == S20_FAILURE) {
+                puts("Error: encryption failed");
+                return;
+            }
+            
+            veribufIsValid = is_valid(veribuf_test);
+            
+            if (veribufIsValid) {
+                printf("\ndecoded data:\n");
+                hexdump(veribuf_test, VERIBUF_SIZE);
+                matches = true;
+                keyFound = true;
+                break;
+            }
+            
+            nrOfKeysSearched++;
+                        
+            if (nrOfKeysSearched%50000000 ==0) {
+                boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();  
+                duration = (now-beginTs);
+                std::cout << "Diff:" << duration.total_seconds() << endl;
+                beginTs = boost::posix_time::second_clock::local_time();         
+            }
+        
+        } while (!(veribufIsValid || keyFound)); 
+        
+        if (matches) {
+            printf("[+] %s is a valid key!\n", key);
+            return;
+        } else {
+            printf("[-] %s is NOT a valid key!\n", key);
+        }        
 }
 
 int main(int argc, char *argv[])
@@ -43,8 +135,9 @@ int main(int argc, char *argv[])
         printf("[-] Petya not found on the disk!\n");
         return -1;
     }
-    char* veribuf = fetch_veribuf(fp);
-    char* nonce = fetch_nonce(fp);
+    veribuf = fetch_veribuf(fp);
+    nonce = fetch_nonce(fp);
+    
     if (!nonce || !veribuf) {
         printf("Cannot fetch nonce or veribuf!\n");
         return -1;
@@ -63,44 +156,23 @@ int main(int argc, char *argv[])
 
     if (argc >= 3) {
         key = argv[2];
+        tryKey(key);
     } else {
         printf("The key will be random!\n");
         srand(time(NULL));
-        make_random = true;
         printf("Please wait, searching key is in progress...\n");
     }
+    
+    vector<boost::thread> threadList;
 
-    char veribuf_test[VERIBUF_SIZE];
-    memcpy(veribuf_test, veribuf, VERIBUF_SIZE);
-    bool matches = false;
-    do {
-        if (make_random)
-            make_random_key(key);
-
-        if (VERBOSE)
-            printf("Key: %s\n", key);
-
-        memcpy(veribuf_test, veribuf, VERIBUF_SIZE);
-
-        if (s20_crypt((uint8_t *) key, S20_KEYLEN_128, (uint8_t *) nonce, 0, (uint8_t *) veribuf_test, VERIBUF_SIZE) == S20_FAILURE) {
-            puts("Error: encryption failed");
-            return -1;
-        }
-        if (is_valid(veribuf_test)) {
-            printf("\ndecoded data:\n");
-            hexdump(veribuf_test, VERIBUF_SIZE);
-            matches = true;
-            break;
-        }
-
-    } while (!is_valid(veribuf_test) && make_random);
-
-    if (matches) {
-        printf("[+] %s is a valid key!\n", key);
-        return 0;
-    } else {
-        printf("[-] %s is NOT a valid key!\n", key);
+    for (int i=0; i<10; i++) {
+        threadList.push_back(boost::thread(tryKeyRandom));
     }
+    
+    for (unsigned int i=0; i<threadList.size(); i++) {
+        threadList[i].join();
+    }
+
     return -1;
 }
 

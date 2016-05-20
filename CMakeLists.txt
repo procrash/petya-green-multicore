@@ -14,6 +14,20 @@ set (srcs
     util.cpp
     )
 
+set(Boost_USE_STATIC_LIBS OFF) 
+set(Boost_USE_MULTITHREADED ON)  
+set(Boost_USE_STATIC_RUNTIME OFF) 
+find_package(Boost 1.45.0 COMPONENTS system thread) 
+
+if(Boost_FOUND)
+    include_directories(${Boost_INCLUDE_DIRS}) 
+    add_executable (petya_green ${hdrs} ${srcs})
+    target_link_libraries(petya_green 
+	${Boost_LIBRARIES}
+ 	${Boost_SYSTEM_LIBRARY}
+	)
+endif()
+
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 # SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 
@@ -34,5 +48,9 @@ IF (OUT_32BIT)
     set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -m32" CACHE STRING "c flags")
 ENDIF(OUT_32BIT)
 
-add_executable (petya_green ${hdrs} ${srcs})
+
+
+
+
+
 
