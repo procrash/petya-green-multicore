@@ -5,6 +5,7 @@ set (hdrs
     petya.h
     salsa20.h
     util.h
+    gpu_code.h
     )
 
 set (srcs
@@ -12,21 +13,35 @@ set (srcs
     main.cpp
     petya.cpp
     util.cpp
+    gpu_code.cu
+    )
+
+# Pass options to NVCC
+set(
+    CUDA_NVCC_FLAGS
+    ${CUDA_NVCC_FLAGS};
+    -O3 -gencode arch=compute_20,code=sm_20
     )
 
 set(Boost_USE_STATIC_LIBS OFF) 
 set(Boost_USE_MULTITHREADED ON)  
 set(Boost_USE_STATIC_RUNTIME OFF) 
 find_package(Boost 1.45.0 COMPONENTS system thread) 
+find_package(CUDA QUIET REQUIRED)
 
 if(Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIRS}) 
-    add_executable (petya_green ${hdrs} ${srcs})
+    cuda_add_executable (petya_green ${hdrs} ${srcs})
     target_link_libraries(petya_green 
 	${Boost_LIBRARIES}
  	${Boost_SYSTEM_LIBRARY}
 	)
 endif()
+
+
+# cuda_add_executable(
+#    petya_green 
+#    gpu_code.cu)
 
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 # SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")

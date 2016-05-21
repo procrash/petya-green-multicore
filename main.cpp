@@ -1,6 +1,6 @@
 #include <boost/thread.hpp>
 #include <boost/container/vector.hpp>
-
+#include "gpu_code.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -17,6 +17,8 @@
 #include <iostream>
 
 using namespace std;
+
+
 
 void make_random_key(char* key)
 {
@@ -154,6 +156,8 @@ int main(int argc, char *argv[])
     char *key = p_key;
     bool make_random = false;
 
+    
+
     if (argc >= 3) {
         key = argv[2];
         tryKey(key);
@@ -163,14 +167,22 @@ int main(int argc, char *argv[])
         printf("Please wait, searching key is in progress...\n");
     }
     
-    vector<boost::thread> threadList;
-
-    for (int i=0; i<10; i++) {
-        threadList.push_back(boost::thread(tryKeyRandom));
-    }
+    bool GPU = true;
     
-    for (unsigned int i=0; i<threadList.size(); i++) {
-        threadList[i].join();
+    if (GPU) {
+        initializeAndCalculate((uint8_t *)nonce,  veribuf);
+    } else { // CPU
+    
+    
+        vector<boost::thread> threadList;
+    
+        for (int i=0; i<10; i++) {
+            threadList.push_back(boost::thread(tryKeyRandom));
+        }
+        
+        for (unsigned int i=0; i<threadList.size(); i++) {
+            threadList[i].join();
+        }
     }
 
     return -1;
