@@ -286,7 +286,7 @@ void make_random_key_gpu(char* key)
 
     memset(key, 'x', KEY_SIZE);
 
-    for (int i = i; i < KEY_SIZE; i+=4) {
+    for (int i = 0; i < KEY_SIZE; i+=4) {
         size_t rand_i1 = rand() % charset_len;
         size_t rand_i2 = rand() % charset_len;
         key[i] = KEY_CHARSET[rand_i1];
@@ -398,7 +398,7 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
         exit(EXIT_FAILURE);
     }
                             
-    gpu_crypt_and_validate<<<1, 1>>>(key_dc, 
+    gpu_crypt_and_validate<<<1, 1024>>>(key_dc, 
                                      nonce_dc, 
                                      si_dc, 
                                      verifbuf_test_dc, 
@@ -427,7 +427,7 @@ err = cudaGetLastError();
         exit(EXIT_FAILURE);
     }
     
-    if (result_hc) {
+    if (!result_hc) {
         printf("Cuda Result is false");
     } else {
         printf("Cuda Result is true");
