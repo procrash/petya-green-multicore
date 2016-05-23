@@ -19,16 +19,25 @@ vectorAdd(const float *A, const float *B, float *C, int numElements)
 }
 
 
-
 __global__ void gpu_crypt_and_validate(uint8_t *key,
                            
                             uint8_t nonce[8],
                             uint32_t si,
                             uint8_t *buf,
                             uint32_t buflen,
-                            bool *isValid)
+                            bool *isValid,
+		            int nrTotal)
 {
+  int threadNr = blockDim.x * blockIdx.x + threadIdx.x;
+
+  if (threadNr>=nrTotal) return;
+
+  (*isValid) = false;
+
+
+  if (threadNr!=0)  return;
   
+   
   uint8_t keystream[64];
   uint8_t n[16] = { 0 };
   uint32_t i;
@@ -289,6 +298,8 @@ void make_random_key_gpu(char* key)
 
 void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
 
+    int n=2048*2048;
+
     char p_key[KEY_SIZE+1];
     char *key = p_key;               
 
@@ -392,10 +403,18 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
                                      si_dc, 
                                      verifbuf_test_dc, 
                                      VERIBUF_SIZE, 
-                                     result_dc);
+                                     result_dc,n );
     
     
     
+err = cudaGetLastError();
+
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "error starting thread on gpu (error code %s)!\n",      cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
     
     err = cudaMemcpy(&result_hc, 
                      result_dc, 
