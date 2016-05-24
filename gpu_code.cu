@@ -5,6 +5,10 @@
 #define SHR(x, s) ((uint32_t) ((x) >> (32 - ((s) & 31))))
 #define ROTL(x, s) ((uint32_t) (SHL((x), (s)) | SHR((x), (s))))
 
+#define NR_THREADS 1024
+#define NR_BLOCKS 500
+
+#define NR_KEYS (NR_THREADS*NR_BLOCKS)
 
 // Cuda Code
 __global__ void
@@ -19,7 +23,7 @@ vectorAdd(const float *A, const float *B, float *C, int numElements)
 }
 
 
-__global__ void gpu_crypt_and_validate(uint8_t *key,
+__global__ void gpu_crypt_and_validate(uint8_t *keys,
                            
                             uint8_t nonce[8],
                             uint32_t si,
@@ -32,10 +36,13 @@ __global__ void gpu_crypt_and_validate(uint8_t *key,
 
   if (threadNr>=nrTotal) return;
 
+  uint8_t *key = keys + (threadNr*(KEY_SIZE));   
+  
+
   (*isValid) = false;
 
 
-  if (threadNr!=0)  return;
+//   if (threadNr!=0)  return;
   
    
   uint8_t keystream[64];
@@ -268,31 +275,37 @@ __global__ void gpu_crypt_and_validate(uint8_t *key,
     buf[i] ^= keystream[(si + i) % 64];
   }
   
+
   // Validate Crypto Result 
   for (size_t i = 0; i < VERIBUF_SIZE; i++) {
      if (buf[i] != VERIFICATION_CHAR) {
-        (*isValid) = false;
+        (isValid)[threadNr] = false;
         return;
     }
   }
   
-  *isValid = true;
+  isValid[threadNr] = true;
   
 }
 
-void make_random_key_gpu(char* key)
+void make_random_keys_gpu(char* key, int nrOfKeys)
 {
     size_t charset_len = strlen(KEY_CHARSET);
 
-    memset(key, 'x', KEY_SIZE);
+    memset(key, 'x', (KEY_SIZE)*nrOfKeys);
 
-    for (int i = 0; i < KEY_SIZE; i+=4) {
-        size_t rand_i1 = rand() % charset_len;
-        size_t rand_i2 = rand() % charset_len;
-        key[i] = KEY_CHARSET[rand_i1];
-        key[i+1] = KEY_CHARSET[rand_i2];
-    }
-    key[KEY_SIZE] = 0;
+    for (int keyNr =0; keyNr<nrOfKeys; keyNr++) {
+        int startIdx = keyNr*(KEY_SIZE);
+        
+        for (int i = 0; i < KEY_SIZE; i+=4) {
+            size_t rand_i1 = rand() % charset_len;
+            size_t rand_i2 = rand() % charset_len;
+            key[i+startIdx] = KEY_CHARSET[rand_i1];
+            key[i+1+startIdx] = KEY_CHARSET[rand_i2];
+        }
+        
+        // key[KEY_SIZE+1+startIdx] = 0;
+        }
 }
 
 
@@ -300,7 +313,8 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
 
     int n=2048*2048;
 
-    char p_key[KEY_SIZE+1];
+//    int nrOfKeys = 1024;
+    char p_key[(KEY_SIZE)*NR_KEYS];
     char *key = p_key;               
 
 
@@ -344,7 +358,7 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
     uint32_t buflen_dc;
     
     
-    err = cudaMalloc((void **)&key_dc, KEY_SIZE);
+    err = cudaMalloc((void **)&key_dc, (KEY_SIZE)*NR_KEYS);
     
     if (err != cudaSuccess)
     {
@@ -375,10 +389,10 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
         exit(EXIT_FAILURE);
     }
 
-    bool result_hc;
+    bool result_hc[NR_KEYS];
     bool *result_dc;
     
-    err = cudaMalloc((void **)&result_dc, sizeof(bool));
+    err = cudaMalloc((void **)&result_dc, sizeof(bool)*NR_KEYS);
     
     if (err != cudaSuccess)
     {
@@ -387,51 +401,78 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
     }
 
 
-    make_random_key_gpu(key);
-    err = cudaMemcpy(key_dc, (uint8_t *) key, KEY_SIZE, cudaMemcpyHostToDevice);
+
+
+    bool keyFound = false;
+    do {
+
+        make_random_keys_gpu(key, NR_KEYS);
+        
+        
+        
+        
+        
+        err = cudaMemcpy(key_dc, (uint8_t *) key, (KEY_SIZE)*NR_KEYS, cudaMemcpyHostToDevice);
+        
+        err = cudaGetLastError();
     
+        if (err != cudaSuccess)
+        {
+            fprintf(stderr, "Failed to copy key from host to gpu (error code %s)!\n",      cudaGetErrorString(err));
+            exit(EXIT_FAILURE);
+        }
+                                
+        gpu_crypt_and_validate<<<NR_BLOCKS, NR_THREADS>>>(key_dc, 
+                                         nonce_dc, 
+                                         si_dc, 
+                                         verifbuf_test_dc, 
+                                         VERIBUF_SIZE, 
+                                         result_dc,n );
+        
+        
+        
     err = cudaGetLastError();
+    
+        if (err != cudaSuccess)
+        {
+            fprintf(stderr, "error starting thread on gpu (error code %s)!\n",      cudaGetErrorString(err));
+            exit(EXIT_FAILURE);
+        }
+    
+        
+        err = cudaMemcpy(&result_hc, 
+                         result_dc, 
+                         sizeof(bool)*NR_KEYS, 
+                         cudaMemcpyDeviceToHost);
+    
+        if (err != cudaSuccess)
+        {
+            fprintf(stderr, "Failed to copy memory from device to host (error code %s)!\n",      cudaGetErrorString(err));
+            exit(EXIT_FAILURE);
+        }
+        
+        for (int i=0; i<NR_KEYS;i++) {
+            if (result_hc[i]) {
+                printf("Key found:\r\n");
+                for (int j=0; j<KEY_SIZE; j++) {
+                    printf("%c", key[(KEY_SIZE)*i+j]);
+                }
+                printf("\r\n");
+                keyFound = true;
+            }/* else {
+            
+                printf("Key not found:\r\n");
+                for (int j=0; j<KEY_SIZE; j++) {
+                    printf("%c", key[(KEY_SIZE)*i+j]);
+                }
+                printf("\r\n");
 
-    if (err != cudaSuccess)
-    {
-        fprintf(stderr, "Failed to copy key from host to gpu (error code %s)!\n",      cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
-    }
-                            
-    gpu_crypt_and_validate<<<1, 1024>>>(key_dc, 
-                                     nonce_dc, 
-                                     si_dc, 
-                                     verifbuf_test_dc, 
-                                     VERIBUF_SIZE, 
-                                     result_dc,n );
+            }*/
+        }
+        
+    } while (!keyFound);
     
     
-    
-err = cudaGetLastError();
-
-    if (err != cudaSuccess)
-    {
-        fprintf(stderr, "error starting thread on gpu (error code %s)!\n",      cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
-    }
-
-    
-    err = cudaMemcpy(&result_hc, 
-                     result_dc, 
-                     sizeof(bool), 
-                     cudaMemcpyDeviceToHost);
-
-    if (err != cudaSuccess)
-    {
-        fprintf(stderr, "Failed to copy memory from device to host (error code %s)!\n",      cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
-    }
-    
-    if (!result_hc) {
-        printf("Cuda Result is false");
-    } else {
-        printf("Cuda Result is true");
-    }
     
     /*
     err = cudaMemcpy(veribuf_test_local, verifbuf_test_dc, VERIBUF_SIZE, cudaMemcpyDeviceToHost);
