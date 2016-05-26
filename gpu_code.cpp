@@ -228,11 +228,12 @@ void gpu_crypt_and_validate(uint8_t *keys,
 	  z[9] =  z[9]  ^ ROTL(z[8] +  z[11], 13);
 	  z[10] = z[10] ^ ROTL(z[9] +  z[8], 18);
 	  
-	  // s20_quarterround(&y[15], &y[12], &y[12], &y[14]);
+	  // s20_quarterround(&y[15], &y[12], &y[13], &y[14]);
 	  z[12] = z[12] ^ ROTL(z[15] + z[14], 7);
-	  z[12] = z[12] ^ ROTL(z[12] + z[15], 9);
-	  z[14] = z[14] ^ ROTL(z[12] + z[12], 13);
-	  z[15] = z[15] ^ ROTL(z[14] + z[12], 18);
+	  z[13] = z[13] ^ ROTL(z[12] + z[15], 9);
+	  z[14] = z[14] ^ ROTL(z[12] + z[13], 13);
+	  z[15] = z[15] ^ ROTL(z[14] + z[13], 18);
+
 	  }
 	
 	  for (i = 0; i < 16; ++i) {
@@ -363,11 +364,11 @@ void gpu_crypt_and_validate(uint8_t *keys,
 				  z[10] = z[10] ^ ROTL(z[9] +  z[8], 18);
 
 
-				  // s20_quarterround(&y[15], &y[12], &y[12], &y[14]);
+				  // s20_quarterround(&y[15], &y[12], &y[13], &y[14]);
 				  z[12] = z[12] ^ ROTL(z[15] + z[14], 7);
-				  z[12] = z[12] ^ ROTL(z[12] + z[15], 9);
-				  z[14] = z[14] ^ ROTL(z[12] + z[12], 13);
-				  z[15] = z[15] ^ ROTL(z[14] + z[12], 18);
+				  z[13] = z[13] ^ ROTL(z[12] + z[15], 9);
+				  z[14] = z[14] ^ ROTL(z[12] + z[13], 13);
+				  z[15] = z[15] ^ ROTL(z[14] + z[13], 18);
 
 
 			  }
