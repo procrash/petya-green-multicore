@@ -41,7 +41,7 @@ if(Boost_FOUND)
 endif()
 
 
-# cuda_add_executable(
+#cuda_add_executable(
 #    petya_green 
 #    gpu_code.cu)
 

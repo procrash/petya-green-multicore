@@ -84,6 +84,7 @@ void tryKeyRandom() {
             
             make_random_key(key);
     
+
             if (s20_crypt((uint8_t *) key, S20_KEYLEN_128, (uint8_t *) nonce, 0, (uint8_t *) veribuf_test, VERIBUF_SIZE) == S20_FAILURE) {
                 puts("Error: encryption failed");
                 return;
