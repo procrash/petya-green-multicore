@@ -22,7 +22,8 @@ set(CMAKE_BUILD_TYPE Debug)
 set(
     CUDA_NVCC_FLAGS
     ${CUDA_NVCC_FLAGS};
-    -O3 -gencode arch=compute_30,code=sm_30
+    -O3 -gencode arch=compute_30,code=sm_30 
+#-lineinfo  -maxrregcount=16
     )
 
 set(Boost_USE_STATIC_LIBS OFF) 

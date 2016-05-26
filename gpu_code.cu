@@ -7,14 +7,64 @@
 
 #include "petya.h"
 
+#include <boost/thread.hpp>
+#include <boost/container/vector.hpp>
+
 #define SHL(x, s) ((uint32_t) ((x) << ((s) & 31)))
 #define SHR(x, s) ((uint32_t) ((x) >> (32 - ((s) & 31))))
 #define ROTL(x, s) ((uint32_t) (SHL((x), (s)) | SHR((x), (s))))
 
 #define NR_THREADS 1024
 #define NR_BLOCKS 1
+#define NR_OF_KEYS_CALCULATED_BEFORE_THREAD_RETURNS (unsigned long)10000
+#define NR_KEYS (unsigned long)(NR_THREADS*NR_BLOCKS)
 
-#define NR_KEYS (long)(NR_THREADS*NR_BLOCKS)
+
+// Define this to turn on error checking
+#define CUDA_ERROR_CHECK
+
+#define CudaSafeCall( err ) __cudaSafeCall( err, __FILE__, __LINE__ )
+#define CudaCheckError()    __cudaCheckError( __FILE__, __LINE__ )
+
+inline void __cudaSafeCall( cudaError err, const char *file, const int line )
+{
+#ifdef CUDA_ERROR_CHECK
+    if ( cudaSuccess != err )
+    {
+        fprintf( stderr, "cudaSafeCall() failed at %s:%i : %s\n",
+                 file, line, cudaGetErrorString( err ) );
+        exit( -1 );
+    }
+#endif
+
+    return;
+}
+
+inline void __cudaCheckError( const char *file, const int line )
+{
+#ifdef CUDA_ERROR_CHECK
+    cudaError err = cudaGetLastError();
+    if ( cudaSuccess != err )
+    {
+        fprintf( stderr, "cudaCheckError() failed at %s:%i : %s\n",
+                 file, line, cudaGetErrorString( err ) );
+        exit( -1 );
+    }
+
+    // More careful checking. However, this will affect performance.
+    // Comment away if needed.
+    err = cudaDeviceSynchronize();
+    if( cudaSuccess != err )
+    {
+        fprintf( stderr, "cudaCheckError() with sync failed at %s:%i : %s\n",
+                 file, line, cudaGetErrorString( err ) );
+        exit( -1 );
+    }
+#endif
+
+    return;
+}
+
 
 using namespace std;
 
@@ -49,6 +99,11 @@ void nextKey16Byte(char *key) {
 	char keyChars[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	map<char, int> keyToIndexMap;
 	
+	/*
+	char oldKeyDebug[KEY_SIZE+1];
+	memcpy(oldKeyDebug, key, KEY_SIZE);
+	oldKeyDebug[KEY_SIZE] = 0;
+	*/
 	
 	for (int i=0; i<sizeof(keyChars); i++) {
 		keyToIndexMap[keyChars[i]]=i;
@@ -65,7 +120,12 @@ void nextKey16Byte(char *key) {
 		if (idx!=0) break;
 	}
 	
-	printf("Next key of is %s\r\n",key);
+	/*
+	char keyDebug[KEY_SIZE+1];
+	memcpy(keyDebug, key, KEY_SIZE);
+	keyDebug[KEY_SIZE] = 0;
+	printf("Next key of %s is %s\r\n",oldKeyDebug, keyDebug);
+	*/
 }
 
 
@@ -77,19 +137,12 @@ __global__ void gpu_crypt_and_validate(uint8_t *keys,
                             uint32_t buflen,
                             bool *isValid,
 							int nrTotal,
-							unsigned long nrKeysToCalculatePerThread)
+							unsigned long nrKeysToCalculatePerThread,
+							char *keyChars,
+							int *keyToIndexMap
+							)
 {
-  // This is initialized here to save time to calculate next key later, todo: Calculate outside and provide with parameters...
-  char keyChars[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    
-  int keyToIndexMap[256];
-  for (int i=0; i<sizeof(keyChars);i++) {
-	  for (int j=0; j<256;j++) {
-		  if (keyChars[i]==(char)j) {
-			  keyToIndexMap[(char)j]=i;
-		  }
-	  }
-  }
+
 
   int threadNr = blockDim.x * blockIdx.x + threadIdx.x;
 
@@ -129,6 +182,9 @@ __global__ void gpu_crypt_and_validate(uint8_t *keys,
 	  for (i = 0; i < 64; i += 20)
 		for (j = 0; j < 4; ++j)
 		  keystream[i + j] = t[i / 20][j];
+	  
+	  
+	  
 	
 	  for (i = 0; i < 16; ++i) {
 		keystream[4+i]  = key[i];
@@ -332,11 +388,12 @@ __global__ void gpu_crypt_and_validate(uint8_t *keys,
 
 	  	  (isValid)[threadNr] = true; // Assume we found the key
 
+	  	  
 		  // Validate Crypto Result
 		  for (size_t bufPos = 0; bufPos < VERIBUF_SIZE; bufPos++) {
 			 if (buf[bufPos] != VERIFICATION_CHAR) {
 				(isValid)[threadNr] = false; // We didn't
-
+				
 				// Calculate next key to try...
 				int posToKey[] = {13,12,9,8,5,4,1,0};
 
@@ -347,9 +404,10 @@ __global__ void gpu_crypt_and_validate(uint8_t *keys,
 					key[posToKey[i]] = keyChars[idx];
 
 					if (idx!=0) break;
-				}
+				}				
 				break;
 			}
+			
 		  }
 
 		  nrKeysToCalculatePerThread--;
@@ -369,14 +427,15 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
     char p_key[(KEY_SIZE)*NR_KEYS];
     char *key = p_key;             
     
+    unsigned long keyBlocks = pow(26*2+10,8)/(NR_THREADS*NR_BLOCKS);
+    
     for (unsigned long i=0; i<NR_KEYS;i++){
-    	calculate16ByteKeyFromIndex(0, key+i*NR_KEYS);
+    	calculate16ByteKeyFromIndex(0+i*keyBlocks, key+i*KEY_SIZE);
     }
 
     cudaError_t err = cudaSuccess;
     
     uint8_t *verifbuf_test_dc = NULL;
-    char veribuf_test_local[VERIBUF_SIZE];
          
     err = cudaMalloc((void **)&verifbuf_test_dc, VERIBUF_SIZE);
     if (err != cudaSuccess)
@@ -395,67 +454,59 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
     }
     
     
-                    
-    uint32_t si_hc;
-    uint8_t *buf_hc;
-    uint32_t buflen_hc;
+    // This is initialized here to save time to calculate next key later, todo: Calculate outside and provide with parameters...
+    char keyChars[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      
+    int keyToIndexMap[256];
+    for (int i=0; i<sizeof(keyChars);i++) {
+  	  for (int j=0; j<256;j++) {
+  		  if (keyChars[i]==(char)j) {
+  			  keyToIndexMap[(char)j]=i;
+  		  }
+  	  }
+    }
+                        
+//     uint32_t si_hc;
+//    uint8_t *buf_hc;
+//    uint32_t buflen_hc;
     
     uint8_t *key_dc;                       
     uint8_t *nonce_dc;
     uint32_t si_dc = 0;
-    uint8_t *buf_dc;
-    uint32_t buflen_dc;
+//    uint8_t *buf_dc;
+//    uint32_t buflen_dc;
     
-    
-    err = cudaMalloc((void **)&key_dc, (KEY_SIZE)*NR_KEYS);
-    if (err != cudaSuccess)
-    {
-        fprintf(stderr, "Failed to allocate device memory for key (error code %s)!\n", cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
-    }
-
-
-    err = cudaMalloc((void **)&nonce_dc, 8);
-    if (err != cudaSuccess)
-    {
-        fprintf(stderr, "Failed to allocate device memory for nonce (error code %s)!\n", cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
-    }
-    
+    char *keyChars_dc;
+    int *keyToIndexMap_dc;
     
 
-    
-    
-    err = cudaMemcpy(nonce_dc, nonce_hc, 8, cudaMemcpyHostToDevice);
-    if (err != cudaSuccess)
-    {
-        fprintf(stderr, "Failed to copy nonce from host to gpu (error code %s)!\n",      cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
-    }
+    CudaSafeCall(cudaMalloc((void **)&keyChars_dc, sizeof(keyChars)));
+    CudaSafeCall(cudaMemcpy(keyChars_dc, keyChars, sizeof(keyChars), cudaMemcpyHostToDevice));
+    CudaSafeCall(cudaMalloc((void **)&keyToIndexMap_dc, 256));
+    CudaSafeCall(cudaMemcpy(keyToIndexMap_dc, keyToIndexMap, 256, cudaMemcpyHostToDevice));
+    CudaSafeCall(cudaMalloc((void **)&key_dc, (KEY_SIZE)*NR_KEYS));
+    CudaSafeCall(cudaMalloc((void **)&nonce_dc, 8));
+    CudaSafeCall(cudaMemcpy(nonce_dc, nonce_hc, 8, cudaMemcpyHostToDevice));
 
     bool result_hc[NR_KEYS];
     bool *result_dc;
     
-    err = cudaMalloc((void **)&result_dc, sizeof(bool)*NR_KEYS);
-    if (err != cudaSuccess)
-    {
-        fprintf(stderr, "Failed to allocate device memory for isValid Result (error code %s)!\n", cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
-    }
+    CudaSafeCall(cudaMalloc((void **)&result_dc, sizeof(bool)*NR_KEYS));
 
 
     bool keyFound = false;
     
-    unsigned long nrOfKeysPerThreadAndCall = 1; // pow(2*26+10,8)/NR_THREADS
+    
+    unsigned long keysCalculated = 0;
+    
+    boost::posix_time::time_duration duration;
+    boost::posix_time::ptime beginTs = boost::posix_time::second_clock::local_time();
+
+    // int debugCalls =1;
     
     do {
         
-        err = cudaMemcpy(key_dc, (uint8_t *) key, (KEY_SIZE)*NR_KEYS, cudaMemcpyHostToDevice);        
-        if (err != cudaSuccess)
-        {
-            fprintf(stderr, "Failed to copy key from host to gpu (error code %s)!\n",      cudaGetErrorString(err));
-            exit(EXIT_FAILURE);
-        }
+    	CudaSafeCall(cudaMemcpy(key_dc, (uint8_t *) key, (KEY_SIZE)*NR_KEYS, cudaMemcpyHostToDevice));
                                 
         gpu_crypt_and_validate<<<NR_BLOCKS, NR_THREADS>>>(key_dc, 
                                          nonce_dc, 
@@ -463,36 +514,17 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
                                          verifbuf_test_dc, 
                                          VERIBUF_SIZE, 
                                          result_dc,n, 
-										 nrOfKeysPerThreadAndCall										 
+										 NR_OF_KEYS_CALCULATED_BEFORE_THREAD_RETURNS,
+										 keyChars_dc,
+										 keyToIndexMap_dc
         								  );
+        CudaCheckError();
         
         
-        
-        err = cudaGetLastError();    
-        if (err != cudaSuccess)
-        {
-            fprintf(stderr, "error starting thread on gpu (error code %s)!\n",      cudaGetErrorString(err));
-            exit(EXIT_FAILURE);
-        }
     
         
-        err = cudaMemcpy(&result_hc, 
-                         result_dc, 
-                         sizeof(bool)*NR_KEYS, 
-                         cudaMemcpyDeviceToHost);   
-        if (err != cudaSuccess)
-        {
-            fprintf(stderr, "Failed to copy memory from device to host (error code %s)!\n",      cudaGetErrorString(err));
-            exit(EXIT_FAILURE);
-        }
-
-        
-        err = cudaMemcpy((uint8_t *) key, key_dc, (KEY_SIZE)*NR_KEYS, cudaMemcpyDeviceToHost);        
-        if (err != cudaSuccess)
-        {
-            fprintf(stderr, "Failed to copy key from host to gpu (error code %s)!\n",      cudaGetErrorString(err));
-            exit(EXIT_FAILURE);
-        }
+        CudaSafeCall(cudaMemcpy(&result_hc, result_dc, sizeof(bool)*NR_KEYS, cudaMemcpyDeviceToHost));        
+        CudaSafeCall(cudaMemcpy((uint8_t *) key, key_dc, (KEY_SIZE)*NR_KEYS, cudaMemcpyDeviceToHost));
         
         
         for (int i=0; i<NR_KEYS;i++) {
@@ -506,43 +538,50 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
             }
         }
 
-        printf("Next round\r\n");
+        //printf("Next round\r\n");
 
         // Calculate next keys for next round...
-        for (unsigned long i=0;i<(KEY_SIZE)*NR_KEYS;i++) {
+        for (unsigned long i=0;i<NR_KEYS;i++) {
         	char *currentKey = (key+i*KEY_SIZE); 
         	nextKey16Byte(currentKey);
         }
         
+        keysCalculated += NR_THREADS*NR_BLOCKS*NR_OF_KEYS_CALCULATED_BEFORE_THREAD_RETURNS;
         
+        if (keysCalculated%1000000 == 0) {
+        	unsigned long divider = 1000000;
+        	// Print estimated time...
+            boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();  
+            duration = (now-beginTs);
+            std::cout << "Diff:" << duration.total_seconds() << endl;
+            std::cout << "Based upon this performance all keys will be calculated in " << endl;
+            
+            unsigned long years = pow(2*26+10,8)/divider*duration.total_seconds() /60/60/24/365;
+            unsigned long days = (pow(2*26+10,8)/divider*duration.total_seconds() /60/60/24)-years*365;
+            unsigned long hours = (pow(2*26+10,8)/divider*duration.total_seconds() /60/60)-(years*365*24+days*24);
+            unsigned long minutes = (pow(2*26+10,8)/divider*duration.total_seconds() /60)-(years*365*24*60+days*24*60+hours*60);
+            
+            std::cout << years << " years" << endl;
+            std::cout << days << " days" << endl;
+            std::cout << hours << " hours" << endl;
+            std::cout << minutes << " minutes" << endl;
+
+            beginTs = boost::posix_time::second_clock::local_time();         
+        }
         
+        // debugCalls--;
+        //if (debugCalls<=0) break;
     } while (!keyFound);
     
     
     
-    
+    CudaSafeCall(cudaFree(keyChars_dc));
+    CudaSafeCall(cudaFree(keyToIndexMap_dc));
 
     // Free device global memory
-     err = cudaFree(result_dc);
+    CudaSafeCall(cudaFree(result_dc));    
+    CudaSafeCall(cudaFree(verifbuf_test_dc));
     
-    
-    if (err != cudaSuccess)
-    {
-        fprintf(stderr, "Failed to free device memory (error code %s)!\n", cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
-    }
-
-
-    
-    
-    err = cudaFree(verifbuf_test_dc);
-    
-    
-    if (err != cudaSuccess)
-    {
-        fprintf(stderr, "Failed to free device memory (error code %s)!\n", cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
-    }
     
 }
 

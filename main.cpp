@@ -172,6 +172,7 @@ int main(int argc, char *argv[])
     
     if (GPU) {
         initializeAndCalculate((uint8_t *)nonce,  veribuf);
+        return 0;
     } else { // CPU
     
     
