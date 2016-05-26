@@ -45,7 +45,58 @@ void tryKey(char *key) {
       bool veribufIsValid = false;
       char veribuf_test[VERIBUF_SIZE];
       
-      memcpy(veribuf_test, veribuf, VERIBUF_SIZE);
+    memcpy(veribuf_test, veribuf, VERIBUF_SIZE);
+
+
+  	nonce[0] = 0x07;
+  	nonce[1] = 0x0c;
+  	nonce[2] = 0x12;
+  	nonce[3] = 0xf6;
+  	nonce[4] = 0x79;
+  	nonce[5] = 0x28;
+  	nonce[6] = 0x73;
+  	nonce[7] = 0xcb;
+
+  	veribuf_test[0] = 0x34;
+  	veribuf_test[1] = 0x80;
+  	veribuf_test[2] = 0x15;
+  	veribuf_test[3] = 0x1a;
+  	veribuf_test[4] = 0xd1;
+  	veribuf_test[5] = 0x76;
+  	veribuf_test[6] = 0x5c;
+  	veribuf_test[7] = 0x7b;
+  	veribuf_test[8] = 0x60;
+  	veribuf_test[9] = 0x2b;
+  	veribuf_test[10] = 0xe3;
+  	veribuf_test[11] = 0xd0;
+  	veribuf_test[12] = 0xd0;
+  	veribuf_test[13] = 0xae;
+  	veribuf_test[14] = 0xf8;
+  	veribuf_test[15] = 0xc2;
+
+  	key[0] = 'n';
+  	key[1] = 'G';
+  	key[2] = 'u';
+  	key[3] = 'J';
+  	key[4] = 'G';
+  	key[5] = 'b';
+  	key[6] = 'm';
+  	key[7] = 'D';
+  	key[8] = 'u';
+  	key[9] = 'V';
+  	key[10] = 'N';
+  	key[11] = '9';
+  	key[12] = 'X';
+  	key[13] = 'm';
+  	key[14] = 'L';
+  	key[15] = 'a';
+
+
+
+
+
+
+
       
       if (s20_crypt((uint8_t *) key, S20_KEYLEN_128, (uint8_t *) nonce, 0, (uint8_t *) veribuf_test, VERIBUF_SIZE) == S20_FAILURE) {
           puts("Error: encryption failed");
@@ -158,6 +209,8 @@ int main(int argc, char *argv[])
     bool make_random = false;
 
     
+
+
 
     if (argc >= 3) {
         key = argv[2];

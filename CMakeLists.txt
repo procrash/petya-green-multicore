@@ -13,7 +13,8 @@ set (srcs
     main.cpp
     petya.cpp
     util.cpp
-    gpu_code.cu
+#    gpu_code.cu
+    gpu_code.cpp
     )
 
 set(CMAKE_BUILD_TYPE Debug)

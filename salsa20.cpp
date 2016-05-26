@@ -4,6 +4,11 @@ Original: https://github.com/alexwebr/salsa20
 #include <stdint.h>
 #include <stddef.h>
 #include "salsa20.h"
+#include <stdio.h>
+#include "util.h"
+
+int debugFlag =0;
+
 
 static uint32_t rotl(uint32_t value, int shift)
 {
@@ -12,7 +17,15 @@ static uint32_t rotl(uint32_t value, int shift)
 
 static void s20_quarterround(uint32_t *y0, uint32_t *y1, uint32_t *y2, uint32_t *y3)
 {
+ if (debugFlag<2) {
+	 printf("y1 is %lx \r\n",*y1);
+	 printf("y2 is %lx \r\n",*y2);
+	 printf("y3 is %lx \r\n",*y3);
+	 printf("y0 is %lx \r\n",*y0);
+ }
   *y1 = *y1 ^ rotl(*y0 + *y3, 7);
+
+  printf("After first line: y0+y3 %lx Rotl:%lx After xor: %lx \r\n",*y0+*y3, rotl(*y0 + *y3, 7), *y1 );
   *y2 = *y2 ^ rotl(*y1 + *y0, 9);
   *y3 = *y3 ^ rotl(*y2 + *y1, 13);
   *y0 = *y0 ^ rotl(*y3 + *y2, 18);
@@ -28,7 +41,19 @@ static void s20_rowround(uint32_t y[16])
 
 static void s20_columnround(uint32_t x[16])
 {
+  if (debugFlag<2) {
+	  printf("Original Z before is:\r\n");
+	  hexdump((char*)x, 16*sizeof(uint32_t));
+  }
+
   s20_quarterround(&x[0], &x[4], &x[8], &x[12]);
+
+  if (debugFlag<2) {
+      printf("Original Z after is:\r\n");
+      hexdump((char*)x, 16*sizeof(uint32_t));
+      debugFlag++;
+  }
+
   s20_quarterround(&x[5], &x[9], &x[13], &x[1]);
   s20_quarterround(&x[10], &x[14], &x[2], &x[6]);
   s20_quarterround(&x[15], &x[3], &x[7], &x[11]);
@@ -63,8 +88,14 @@ static void s20_hash(uint8_t seq[64])
   for (i = 0; i < 16; ++i)
     x[i] = z[i] = s20_littleendian(seq + (4 * i));
 
-  for (i = 0; i < 10; ++i)
+
+  for (i = 0; i < 10; ++i) {
     s20_doubleround(z);
+  }
+
+
+
+
 
   for (i = 0; i < 16; ++i) {
     z[i] += x[i];
@@ -88,6 +119,7 @@ static void s20_expand16(uint8_t *k,
     for (j = 0; j < 4; ++j)
       keystream[i + j] = t[i / 20][j];
 
+
   for (i = 0; i < 16; ++i) {
     keystream[4+i]  = k[i];
     keystream[44+i] = k[i];
@@ -95,6 +127,7 @@ static void s20_expand16(uint8_t *k,
   }
 
   s20_hash(keystream);
+
 }
 
 static void s20_expand32(uint8_t *k,
@@ -142,19 +175,30 @@ enum s20_status_t s20_crypt(uint8_t *key,
   if (expand == NULL || key == NULL || nonce == NULL || buf == NULL)
     return S20_FAILURE;
 
+
   for (i = 0; i < 8; ++i)
     n[i] = nonce[i];
+
 
   if (si % 64 != 0) {
     s20_rev_littleendian(n+8, si / 64);
     (*expand)(key, n, keystream);
   }
 
+  memset(keystream,0,64);
+
+//  printf("Original Initial keystream is:\r\n");
+//  hexdump((char*)keystream, 64);
+
   for (i = 0; i < buflen; ++i) {
     if ((si + i) % 64 == 0) {
       s20_rev_littleendian(n+8, ((si + i) / 64));
+
+
       (*expand)(key, n, keystream);
+
     }
+
 
     buf[i] ^= keystream[(si + i) % 64];
   }

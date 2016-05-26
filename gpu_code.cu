@@ -422,36 +422,70 @@ void stub(char *x){
 
 void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
 
+    char p_key[(KEY_SIZE)*NR_KEYS];
+    char *key = p_key;  
+    
+    
+	nonce_hc[0] = 0x07;
+	nonce_hc[1] = 0x0c;
+	nonce_hc[2] = 0x12;
+	nonce_hc[3] = 0xf6;
+	nonce_hc[4] = 0x79;
+	nonce_hc[5] = 0x28;
+	nonce_hc[6] = 0x73;
+	nonce_hc[7] = 0xcb;
+	
+	verificationBuffer_hc[0] = 0x34;
+	verificationBuffer_hc[1] = 0x80;
+	verificationBuffer_hc[2] = 0x15;
+	verificationBuffer_hc[3] = 0x1a;
+	verificationBuffer_hc[4] = 0xd1;
+	verificationBuffer_hc[5] = 0x76;
+	verificationBuffer_hc[6] = 0x5c;
+	verificationBuffer_hc[7] = 0x7b;
+	verificationBuffer_hc[8] = 0x60;
+	verificationBuffer_hc[9] = 0x2b;
+	verificationBuffer_hc[10] = 0xe3;
+	verificationBuffer_hc[11] = 0xd0;
+	verificationBuffer_hc[12] = 0xd0;
+	verificationBuffer_hc[13] = 0xae;
+	verificationBuffer_hc[14] = 0xf8;
+	verificationBuffer_hc[15] = 0xc2;
+	
+	key[0] = 'n';
+	key[1] = 'G';
+	key[2] = 'u';
+	key[3] = 'J';
+	key[4] = 'G';
+	key[5] = 'b';
+	key[6] = 'm';
+	key[7] = 'D';
+	key[8] = 'u';
+	key[9] = 'V';
+	key[10] = 'N';
+	key[11] = '9';
+	key[12] = 'X';
+	key[13] = 'm';
+	key[14] = 'L';
+	key[15] = 'a';
+	
+	
     int n=2048*2048;
 
-    char p_key[(KEY_SIZE)*NR_KEYS];
-    char *key = p_key;             
+           
     
     unsigned long keyBlocks = pow(26*2+10,8)/(NR_THREADS*NR_BLOCKS);
     
+    /*
     for (unsigned long i=0; i<NR_KEYS;i++){
     	calculate16ByteKeyFromIndex(0+i*keyBlocks, key+i*KEY_SIZE);
-    }
+    }*/
 
-    cudaError_t err = cudaSuccess;
     
     uint8_t *verifbuf_test_dc = NULL;
          
-    err = cudaMalloc((void **)&verifbuf_test_dc, VERIBUF_SIZE);
-    if (err != cudaSuccess)
-    {
-        fprintf(stderr, "Failed to allocate device memory (error code %s)!\n", cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
-    }
-
-
-    err = cudaMemcpy(verifbuf_test_dc, verificationBuffer_hc, VERIBUF_SIZE, cudaMemcpyHostToDevice);
-    if (err != cudaSuccess)
-    {
-        fprintf(stderr, "Failed to copy verification buffer from host to gpu (error code %s)!\n",      cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
-
-    }
+    CudaSafeCall(cudaMalloc((void **)&verifbuf_test_dc, VERIBUF_SIZE));
+    CudaSafeCall(cudaMemcpy(verifbuf_test_dc, verificationBuffer_hc, VERIBUF_SIZE, cudaMemcpyHostToDevice));
     
     
     // This is initialized here to save time to calculate next key later, todo: Calculate outside and provide with parameters...
