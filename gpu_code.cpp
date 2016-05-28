@@ -22,12 +22,7 @@
 
 using namespace std;
 
-/*
-static uint32_t rotl(uint32_t value, int shift)
-{
-  return (value << shift) | (value >> (32 - shift));
-}
-*/
+
 
 // -- 16 Byte Key funtions...
 
@@ -110,11 +105,12 @@ void gpu_crypt_and_validate(uint8_t *keys,
 
   uint8_t *key = keys + (threadNr*(KEY_SIZE));   
 
+  /*
   char debugKey[17];
   memcpy(debugKey, key, 16);
   debugKey[16] = 0;
   printf("Key is %s\r\n", key);
-
+  */
 
 
   while (nrKeysToCalculatePerThread>0) {
@@ -308,22 +304,10 @@ void gpu_crypt_and_validate(uint8_t *keys,
 
 				  // ColumnRound
 				  // s20_quarterround(&x[0], &x[4], &x[8], &x[12]);
-				  if (firstTime<2) {
-						printf("GPU Z before is:\r\n");
-						hexdump((char*)z, 16*sizeof(uint32_t));
-				  }
-
 				  z[4] =  z[4] ^ ROTL(z[0]  + z[12], 7);
 				  z[8] =  z[8] ^ ROTL(z[4]  + z[0], 9);
 				  z[12] = z[12] ^ ROTL(z[8]  + z[4], 13);
 				  z[0] =  z[0]  ^ ROTL(z[12] + z[8], 18);
-
-				  if (firstTime<2) {
-						printf("GPU Z after is:\r\n");
-						hexdump((char*)z, 16*sizeof(uint32_t));
-						firstTime++;
-				  }
-
 
 				  // s20_quarterround(&x[5], &x[9], &x[13], &x[1]);
 				  z[9] =  z[9]  ^ ROTL(z[5]  + z[1], 7);
@@ -430,7 +414,7 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
     char p_key[(KEY_SIZE)*NR_KEYS];
     char *key = p_key;  
     
-    
+    /*
 	nonce_hc[0] = 0x07;
 	nonce_hc[1] = 0x0c;
 	nonce_hc[2] = 0x12;
@@ -473,19 +457,18 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
 	key[13] = 'm';
 	key[14] = 'L';
 	key[15] = 'a';
-	
+	*/
 	
     int n=2048*2048;
 
 
     unsigned long keyBlocks = pow(26*2+10,8)/(NR_THREADS*NR_BLOCKS);
     
-    /*
+
     for (unsigned long i=0; i<NR_KEYS;i++){
     	calculate16ByteKeyFromIndex(0+i*keyBlocks, key+i*KEY_SIZE);
-    }*/
+    }
 
-    
     uint8_t *verifbuf_test_dc = NULL;
          
     verifbuf_test_dc = (uint8_t *)malloc(VERIBUF_SIZE);
@@ -504,15 +487,9 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
   	  }
     }
                         
-//     uint32_t si_hc;
-//    uint8_t *buf_hc;
-//    uint32_t buflen_hc;
-    
     uint8_t *key_dc;                       
     uint8_t *nonce_dc;
     uint32_t si_dc = 0;
-//    uint8_t *buf_dc;
-//    uint32_t buflen_dc;
     
     char *keyChars_dc;
     int *keyToIndexMap_dc;
@@ -540,7 +517,7 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
     boost::posix_time::time_duration duration;
     boost::posix_time::ptime beginTs = boost::posix_time::second_clock::local_time();
 
-    int debugCalls =1;
+    // int debugCalls =1;
     
     do {
         
@@ -606,8 +583,8 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
             beginTs = boost::posix_time::second_clock::local_time();         
         }
         
-        debugCalls--;
-        if (debugCalls<=0) break;
+        // debugCalls--;
+        // if (debugCalls<=0) break;
     } while (!keyFound);
     
     

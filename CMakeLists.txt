@@ -6,6 +6,8 @@ set (hdrs
     salsa20.h
     util.h
     gpu_code.h
+    CustomOptionDescription.h
+    OptionPrinter.h
     )
 
 set (srcs
@@ -13,8 +15,10 @@ set (srcs
     main.cpp
     petya.cpp
     util.cpp
-#    gpu_code.cu
-    gpu_code.cpp
+    gpu_code.cu
+#    gpu_code.cpp
+    CustomOptionDescription.cpp
+    OptionPrinter.cpp
     )
 
 set(CMAKE_BUILD_TYPE Debug)
@@ -30,7 +34,7 @@ set(
 set(Boost_USE_STATIC_LIBS OFF) 
 set(Boost_USE_MULTITHREADED ON)  
 set(Boost_USE_STATIC_RUNTIME OFF) 
-find_package(Boost 1.45.0 COMPONENTS system thread) 
+find_package(Boost 1.45.0 COMPONENTS system thread program_options filesystem regex date_time) 
 find_package(CUDA QUIET REQUIRED)
 
 if(Boost_FOUND)

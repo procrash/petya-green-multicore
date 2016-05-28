@@ -7,8 +7,6 @@ Original: https://github.com/alexwebr/salsa20
 #include <stdio.h>
 #include "util.h"
 
-int debugFlag =0;
-
 
 static uint32_t rotl(uint32_t value, int shift)
 {
@@ -17,15 +15,7 @@ static uint32_t rotl(uint32_t value, int shift)
 
 static void s20_quarterround(uint32_t *y0, uint32_t *y1, uint32_t *y2, uint32_t *y3)
 {
- if (debugFlag<2) {
-	 printf("y1 is %lx \r\n",*y1);
-	 printf("y2 is %lx \r\n",*y2);
-	 printf("y3 is %lx \r\n",*y3);
-	 printf("y0 is %lx \r\n",*y0);
- }
   *y1 = *y1 ^ rotl(*y0 + *y3, 7);
-
-  printf("After first line: y0+y3 %lx Rotl:%lx After xor: %lx \r\n",*y0+*y3, rotl(*y0 + *y3, 7), *y1 );
   *y2 = *y2 ^ rotl(*y1 + *y0, 9);
   *y3 = *y3 ^ rotl(*y2 + *y1, 13);
   *y0 = *y0 ^ rotl(*y3 + *y2, 18);
@@ -41,19 +31,7 @@ static void s20_rowround(uint32_t y[16])
 
 static void s20_columnround(uint32_t x[16])
 {
-  if (debugFlag<2) {
-	  printf("Original Z before is:\r\n");
-	  hexdump((char*)x, 16*sizeof(uint32_t));
-  }
-
   s20_quarterround(&x[0], &x[4], &x[8], &x[12]);
-
-  if (debugFlag<2) {
-      printf("Original Z after is:\r\n");
-      hexdump((char*)x, 16*sizeof(uint32_t));
-      debugFlag++;
-  }
-
   s20_quarterround(&x[5], &x[9], &x[13], &x[1]);
   s20_quarterround(&x[10], &x[14], &x[2], &x[6]);
   s20_quarterround(&x[15], &x[3], &x[7], &x[11]);
@@ -167,28 +145,24 @@ enum s20_status_t s20_crypt(uint8_t *key,
   uint32_t i;
 
   void (*expand)(uint8_t *, uint8_t *, uint8_t *) = NULL;
-  if (keylen == S20_KEYLEN_256)
-    expand = s20_expand32;
-  if (keylen == S20_KEYLEN_128)
+  //if (keylen == S20_KEYLEN_256)
+  //  expand = s20_expand32;
+  // if (keylen == S20_KEYLEN_128)
     expand = s20_expand16;
 
-  if (expand == NULL || key == NULL || nonce == NULL || buf == NULL)
-    return S20_FAILURE;
+  // if (expand == NULL || key == NULL || nonce == NULL || buf == NULL)
+  //  return S20_FAILURE;
 
 
   for (i = 0; i < 8; ++i)
     n[i] = nonce[i];
 
-
+  /*
   if (si % 64 != 0) {
     s20_rev_littleendian(n+8, si / 64);
     (*expand)(key, n, keystream);
   }
-
-  memset(keystream,0,64);
-
-//  printf("Original Initial keystream is:\r\n");
-//  hexdump((char*)keystream, 64);
+  */
 
   for (i = 0; i < buflen; ++i) {
     if ((si + i) % 64 == 0) {
