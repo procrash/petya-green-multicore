@@ -996,19 +996,12 @@ unsigned long measureGPUPerformance(unsigned int nrBlocks,
 
     
     unsigned long nrKeys = nrThreads * nrBlocks;
-    char*keys = (char*) malloc(sizeof(char)*nrKeys);
     bool *result = (bool *)malloc(sizeof(bool)*(nrKeys+1));
+    char*keys = (char*) malloc(sizeof(char)*nrKeys*KEY_SIZE);
     
     memset(result, 0, sizeof(bool)*(nrKeys+1));
     
-    
-
-	cout << "Printing -1..."<< endl;
-	for (int i=0; i<nrKeys+1;i++) {
-		if (result[i]) cout << "1"; else cout << "0";
-	}
-	cout << endl;
-	
+    	
     unsigned long keysCalculated = 0;
 
 	uint8_t nonce_hc[8];
@@ -1056,34 +1049,23 @@ unsigned long measureGPUPerformance(unsigned int nrBlocks,
     verificationBuffer_hc = (uint8_t *) malloc(VERIBUF_SIZE*nrKeys);
    
     
-	cout << "Printing -2..."<< endl;
-	for (int i=0; i<nrKeys+1;i++) {
-		if (result[i]) cout << "1"; else cout << "0";
-	}
-	cout << endl;
 	
     // Fill verificationBuffer for each thread...
     for (unsigned long i=0; i<nrKeys; i++) {
     	memcpy(verificationBuffer_hc+i*KEY_SIZE, verificationBuffer, VERIBUF_SIZE);
     }
     
-	cout << "Printing -3..."<< endl;
-	for (int i=0; i<nrKeys+1;i++) {
-		if (result[i]) cout << "1"; else cout << "0";
-	}
-	cout << endl;
     
-	memset(keys,'0', nrKeys*KEY_SIZE);
+	// memset(keys,'0', nrKeys*KEY_SIZE);
     unsigned long keyBlocks = pow(26*2+10,8)/(nrKeys);
+    
+    char *currentKey = keys;
     for (unsigned long i=0; i<nrKeys;i++){
-    	//calculate16ByteKeyFromIndex(0+i*keyBlocks, keys+i*KEY_SIZE);
+    	calculate16ByteKeyFromIndex(0+i*keyBlocks, currentKey);
+    	currentKey+=KEY_SIZE;
     }
+    
 
-	cout << "Printing -4..."<< endl;
-	for (int i=0; i<nrKeys+1;i++) {
-		if (result[i]) cout << "1"; else cout << "0";
-	}
-	cout << endl;
     /*
     for (int i=0; i<nrKeys;i++) {
     	cout << keys[i];
@@ -1091,11 +1073,6 @@ unsigned long measureGPUPerformance(unsigned int nrBlocks,
     cout << endl;
     */
     
-	cout << "Printing 0..."<< endl;
-	for (int i=0; i<nrKeys+1;i++) {
-		if (result[i]) cout << "1"; else cout << "0";
-	}
-	cout << endl;
 
     
     CudaSafeCall(cudaMalloc((void **)&verifbuf_test_dc, (VERIBUF_SIZE*nrKeys)));
@@ -1111,11 +1088,6 @@ unsigned long measureGPUPerformance(unsigned int nrBlocks,
     CudaSafeCall(cudaMalloc((void **)&keyToIndexMap_dc, 256));
     CudaSafeCall(cudaMemcpy(keyToIndexMap_dc, keyToIndexMap, 256, cudaMemcpyHostToDevice));
 
-	cout << "Printing 0.5 ..."<< endl;
-	for (int i=0; i<nrKeys+1;i++) {
-		if (result[i]) cout << "1"; else cout << "0";
-	}
-	cout << endl;
 
 
 	
@@ -1129,22 +1101,10 @@ unsigned long measureGPUPerformance(unsigned int nrBlocks,
 	cout << " Keys calculated before GPU context returns... "<< keysBeforeContextSwitch  << endl;
     do {
 
-		cout << "Printing 1..."<< endl;
-		for (int i=0; i<nrKeys+1;i++) {
-			if (result[i]) cout << "1"; else cout << "0";
-		}
-		cout << endl;
 
 		
 		CudaSafeCall(cudaMemcpy(keys_dc, (uint8_t *) keys, (KEY_SIZE)*nrKeys, cudaMemcpyHostToDevice));
 	
-
-		cout << "Printing 3..."<< endl;
-		for (int i=0; i<nrKeys+1;i++) {
-			if (result[i]) cout << "1"; else cout << "0";
-		}
-		cout << endl;
-		return 0;
 
 		
 		gpu_decryptMultiShot<<<nrBlocks, nrThreads>>>(keys_dc, 
@@ -1167,12 +1127,7 @@ unsigned long measureGPUPerformance(unsigned int nrBlocks,
 		
 		if (result[0]==true) {
 			
-			for (int i=0; i<nrKeys+1;i++) {
-				if (result[i]) cout << "1"; else cout << "0";
-			}
-			cout << endl;
 			
-			/*
 			cout << endl;
 			for (int i=1; i<nrKeys+1;i++) {
 				if (result[i]) {
@@ -1182,7 +1137,8 @@ unsigned long measureGPUPerformance(unsigned int nrBlocks,
 					}
 					printf("\r\n");
 				}
-			}*/
+			}
+			
 		}
 	
 		
