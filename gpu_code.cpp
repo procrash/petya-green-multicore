@@ -409,37 +409,13 @@ void stub(char *x){
 	x[0]=5;
 }
 
-void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
 
-    char p_key[(KEY_SIZE)*NR_KEYS];
-    char *key = p_key;  
+void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc, char *keys, unsigned long nrKeysPerGPUCall) {
+
+    //  p_key[(KEY_SIZE)*nrKeysPerGPUCall];
+    // char *keys = p_key;
     
     /*
-	nonce_hc[0] = 0x07;
-	nonce_hc[1] = 0x0c;
-	nonce_hc[2] = 0x12;
-	nonce_hc[3] = 0xf6;
-	nonce_hc[4] = 0x79;
-	nonce_hc[5] = 0x28;
-	nonce_hc[6] = 0x73;
-	nonce_hc[7] = 0xcb;
-	
-	verificationBuffer_hc[0] = 0x34;
-	verificationBuffer_hc[1] = 0x80;
-	verificationBuffer_hc[2] = 0x15;
-	verificationBuffer_hc[3] = 0x1a;
-	verificationBuffer_hc[4] = 0xd1;
-	verificationBuffer_hc[5] = 0x76;
-	verificationBuffer_hc[6] = 0x5c;
-	verificationBuffer_hc[7] = 0x7b;
-	verificationBuffer_hc[8] = 0x60;
-	verificationBuffer_hc[9] = 0x2b;
-	verificationBuffer_hc[10] = 0xe3;
-	verificationBuffer_hc[11] = 0xd0;
-	verificationBuffer_hc[12] = 0xd0;
-	verificationBuffer_hc[13] = 0xae;
-	verificationBuffer_hc[14] = 0xf8;
-	verificationBuffer_hc[15] = 0xc2;
 	
 	key[0] = 'n';
 	key[1] = 'G';
@@ -465,8 +441,8 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
     unsigned long keyBlocks = pow(26*2+10,8)/(NR_THREADS*NR_BLOCKS);
     
 
-    for (unsigned long i=0; i<NR_KEYS;i++){
-    	calculate16ByteKeyFromIndex(0+i*keyBlocks, key+i*KEY_SIZE);
+    for (unsigned long i=0; i<nrKeysPerGPUCall;i++){
+    	calculate16ByteKeyFromIndex(0+i*keyBlocks, keys+i*KEY_SIZE);
     }
 
     uint8_t *verifbuf_test_dc = NULL;
@@ -487,7 +463,7 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
   	  }
     }
                         
-    uint8_t *key_dc;                       
+    uint8_t *keys_dc;
     uint8_t *nonce_dc;
     uint32_t si_dc = 0;
     
@@ -499,14 +475,14 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
     memcpy(keyChars_dc, keyChars, sizeof(keyChars));
     keyToIndexMap_dc = (int*)malloc(256);
     memcpy(keyToIndexMap_dc, keyToIndexMap, 256);
-    key_dc = (uint8_t *)malloc(KEY_SIZE*NR_KEYS);
+    keys_dc = (uint8_t *)malloc(KEY_SIZE*nrKeysPerGPUCall);
     nonce_dc = (uint8_t *)malloc(8);
     memcpy(nonce_dc, nonce_hc, 8);
 
-    bool result_hc[NR_KEYS];
+    bool result_hc[nrKeysPerGPUCall];
     bool *result_dc;
     
-    result_dc = (bool*)malloc(sizeof(bool)*NR_KEYS);
+    result_dc = (bool*)malloc(sizeof(bool)*nrKeysPerGPUCall);
 
 
     bool keyFound = false;
@@ -521,9 +497,9 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
     
     do {
         
-    	memcpy(key_dc, (uint8_t *) key, (KEY_SIZE)*NR_KEYS);
+    	memcpy(keys_dc, (uint8_t *) keys, (KEY_SIZE)*nrKeysPerGPUCall);
                                 
-        gpu_crypt_and_validate(key_dc,
+        gpu_crypt_and_validate(keys_dc,
                                          nonce_dc, 
                                          si_dc, 
                                          verifbuf_test_dc, 
@@ -537,15 +513,15 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
         
     
         
-        memcpy(&result_hc, result_dc, sizeof(bool)*NR_KEYS);
-        memcpy((uint8_t *) key, key_dc, (KEY_SIZE)*NR_KEYS);
+        memcpy(&result_hc, result_dc, sizeof(bool)*nrKeysPerGPUCall);
+        memcpy((uint8_t *) keys, keys_dc, (KEY_SIZE)*nrKeysPerGPUCall);
         
         
-        for (int i=0; i<NR_KEYS;i++) {
+        for (int i=0; i<nrKeysPerGPUCall;i++) {
             if (result_hc[i]) {
                 printf("Key found:\r\n");
                 for (int j=0; j<KEY_SIZE; j++) {
-                    printf("%c", key[(KEY_SIZE)*i+j]);
+                    printf("%c", keys[(KEY_SIZE)*i+j]);
                 }
                 printf("\r\n");
                 keyFound = true;
@@ -555,8 +531,8 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer_hc) {
         //printf("Next round\r\n");
 
         // Calculate next keys for next round...
-        for (unsigned long i=0;i<NR_KEYS;i++) {
-        	char *currentKey = (key+i*KEY_SIZE); 
+        for (unsigned long i=0;i<nrKeysPerGPUCall;i++) {
+        	char *currentKey = (keys+i*KEY_SIZE);
         	nextKey16Byte(currentKey);
         }
         

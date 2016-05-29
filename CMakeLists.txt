@@ -8,6 +8,7 @@ set (hdrs
     gpu_code.h
     CustomOptionDescription.h
     OptionPrinter.h
+    keyCandidateDistributor.h
     )
 
 set (srcs
@@ -19,6 +20,7 @@ set (srcs
 #    gpu_code.cpp
     CustomOptionDescription.cpp
     OptionPrinter.cpp
+    keyCandidateDistributor.cpp
     )
 
 set(CMAKE_BUILD_TYPE Debug)

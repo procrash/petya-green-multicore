@@ -5,7 +5,13 @@
 #include <boost/program_options/variables_map.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/filesystem.hpp>
-#include "boost/date_time/posix_time/posix_time.hpp" //include all types plus i/o
+#include <boost/date_time/posix_time/posix_time.hpp> //include all types plus i/o
+
+#include "keyCandidateDistributor.h"
+
+#include <boost/asio.hpp>
+#include <csignal>
+
 #include "OptionPrinter.h"
 
 #include "gpu_code.h"
@@ -28,6 +34,8 @@ namespace po = boost::program_options;
 using namespace std;
 
 
+
+bool shutdownRequested = false;
 
 void make_random_key(char* key)
 {
@@ -70,10 +78,11 @@ bool tryKey(char *key) {
 }
 
 
-void tryKeyRandom() {
+void tryKeyRandom(int i) {
 
+	    // remove static keyword and you're doomed as the TS doesn't seem to be updated
+	    static boost::posix_time::ptime beginTs = boost::posix_time::second_clock::local_time();
         boost::posix_time::time_duration duration;
-        boost::posix_time::ptime beginTs = boost::posix_time::second_clock::local_time();
         
 
         char veribuf_test[VERIBUF_SIZE];
@@ -84,7 +93,7 @@ void tryKeyRandom() {
         bool veribufIsValid = false;
         bool matches = false;
           
-        printf("Trying random key on CPU");
+        //cout << "Trying random key on CPU Thread "<< i << endl;
 
         do {
                     
@@ -136,7 +145,8 @@ void tryKeyRandom() {
                 cout << "Updated to: " << boost::posix_time::to_simple_string(beginTs)  << endl;
             }
         
-        } while (!(veribufIsValid || keyFound)); 
+
+        } while (!(veribufIsValid || keyFound) && !shutdownRequested);
         
         if (matches) {
             printf("[+] %s is a valid key!\n", key);
@@ -146,8 +156,54 @@ void tryKeyRandom() {
         }        
 }
 
+
+
+boost::asio::io_service io_service;
+boost::asio::signal_set signals(io_service, SIGINT, SIGTERM);
+void handler(
+    const boost::system::error_code& error,
+    int signal_number)
+{
+
+  // cout << "Signal handler" <<endl;
+
+  if (!error)
+  {
+    // A signal occurred.
+	  switch (signal_number) {
+	  case SIGTERM:   shutdownRequested = true;
+	  	  	  	  	  //cout << "SIGTERM received" << endl;
+	  	  	  	  	  break;
+	  case SIGINT:   shutdownRequested = true;
+	  	  	  	  	  // ctr+c pressed
+	  	  	  	  	  //cout << "SIGINT received" << endl;
+	  	  	  	  	  break;
+	  default:       signals.async_wait(handler);
+		  	  	     break;
+	  }
+
+//	  cout << "Signal occured" <<endl;
+  }
+
+}
+
+void setupSignalHandler() {
+
+	// io_service.poll();
+
+	// Construct a signal set registered for process termination.
+	// Start an asynchronous wait for one of the signals to occur.
+	//boost::bind(&handler, this);
+	signals.async_wait(handler);
+	io_service.run();
+    // io_service.poll();
+
+}
+
+
 int main(int argc, char *argv[])
 {
+
 
 	std::string appName = boost::filesystem::basename(argv[0]);
 
@@ -168,6 +224,7 @@ int main(int argc, char *argv[])
 		("random,rnd", "use a random key instead of brute force mothod, notice this doesn't allow a resume as wrong keys are not stored")
 	    ("key,k", po::value<string>(), "try a specific key")
 	    ("selftest,st", "check if algorithms work")
+	    ("performance", "provide information about performance")
 
 	;
 
@@ -175,7 +232,7 @@ int main(int argc, char *argv[])
 	optionalGPU.add_options()
 		("gpu_threads", po::value<unsigned int>()->default_value(1024), "number of threads to use on GPU")
 	    ("gpu_blocks", po::value<unsigned int>()->default_value(1), "number of blocks to use on GPU")
-	    ("gpu_keysBeforeReturn", po::value<unsigned long>()->default_value(10000), "number keys which are calculated on a single thread before the context switches back to host")
+	    ("gpu_keysCtxSwitch", po::value<unsigned long>()->default_value(10000), "number keys which are calculated on a the gpu before the context switches back to host")
 	;
 
 	po::options_description optionalCPU("Optional GPU Arguments");
@@ -208,6 +265,25 @@ int main(int argc, char *argv[])
 
 		if (vm.count("version")) {
 			cout << appName << " Version 1.0" << endl;
+			return 0;
+		}
+
+		if (vm.count("performance")) {
+			cout << "There are " << pow(26*2+10,8) << " candidates to try." << endl;
+			cout << "All keys together stored on the harddrive would take " << (unsigned int)((pow(26*2+10,8)*8)/1024/1024/1024/1024) << " terabytes of data [(2*26+10)^8*8)/1 TB]"<< endl;
+			cout << "The odds to find the key by guessing is 1 in 218340105584896" << endl << endl;
+
+			cout << "However based upon your current selected configuration and hardware I try to do a rough time estimation for a brute force attack" << endl;
+
+			unsigned long ctxSwitchKeys = vm["gpu_keysCtxSwitch"].as<unsigned long>();
+			unsigned long nrThreads = vm["gpu_threads"].as<unsigned int>();
+			unsigned long nrBlocks = vm["gpu_blocks"].as<unsigned int>();
+
+
+			measureGPUPerformance(nrBlocks,
+			        nrThreads,
+					ctxSwitchKeys);
+
 			return 0;
 		}
 
@@ -275,14 +351,72 @@ int main(int argc, char *argv[])
 			hexdump(nonce,NONCE_SIZE);
 			printf("---\n");
 
-			printf("Performing CPU test...");
+			printf("Performing CPU test.....");
 
 			bool verifbusIsValid = tryKey(p_key);
-			if (verifbusIsValid) printf(" ok\r\n");
+			if (verifbusIsValid) printf(" passed\r\n");
 			else printf(" failed\r\n");
+
+			printf("Performing GPU test.....");
+
+			unsigned int gpuThreads = vm["gpu_threads"].as<unsigned int>();;
+			unsigned int gpuBlocks = vm["gpu_blocks"].as<unsigned int>();;
+
+			unsigned int nrKeys = gpuThreads*gpuBlocks;
+			char *keys = (char *) malloc(nrKeys*sizeof(char)*KEY_SIZE);
+			bool *result = (bool *) malloc(nrKeys*sizeof(bool)*KEY_SIZE);
+
+			bool gpuPassed = true;
+			for (int i=0; i<nrKeys; i++) {
+				memset(keys, 0, nrKeys*sizeof(char)*KEY_SIZE);
+				memcpy(keys+i*KEY_SIZE, p_key, KEY_SIZE);
+				tryKeysGPUSingleShot(gpuBlocks, gpuThreads, (uint8_t *)nonce, veribuf, keys, nrKeys, result);
+
+				for (int j=0; j<nrKeys;j++) {
+					if (j!=i && (result[j]==true)) {
+						gpuPassed = false;
+						break;
+					}
+					if (j==i && (result[j]==false)) {
+						gpuPassed = false;
+						break;
+					}
+				}
+			}
+
+			if (gpuPassed) printf(" passed\r\n"); else printf(" failed\r\n");
+
+
+			printf("Checking key generator...");
+			srand(time(NULL));
+
+			unsigned long randomKeyIndex;
+			unsigned long resultKeyIndex;
+
+			bool checkOk = true;
+			for (unsigned long i=0; i<10000; i++) {
+				char key[17];
+				randomKeyIndex = rand() % (unsigned long)(pow(2*26+10,8));
+
+				calculate16ByteKeyFromIndex(randomKeyIndex, key);
+				resultKeyIndex = calculateIndexFrom16ByteKey(key);
+
+				if (resultKeyIndex!=randomKeyIndex) {
+					checkOk = false;
+					break;
+				}
+			}
+
+			char keyZeroed[17];
+			memset(keyZeroed,0,17);
+			memcpy(keyZeroed, key, 16);
+
+			if (checkOk) cout << "passed\r\n"; else cout << "failed" << endl; // , random key was "<<keyZeroed << " keyIndex is "<<randomKeyIndex << " result is " <<resultKeyIndex << endl;
+
 
 			free(nonce);
 			free(veribuf);
+
 			return 0;
 		}
 
@@ -347,6 +481,8 @@ int main(int argc, char *argv[])
 		}
 
 
+		boost::thread signalHUPThread(setupSignalHandler);
+
 		if (vm.count("random")) {
 			srand(time(NULL));
 		}
@@ -363,8 +499,11 @@ int main(int argc, char *argv[])
 			unsigned int nrCPUThreads = vm["cpu_threads"].as<unsigned int>();
 
 			for (unsigned int i=0; i<nrCPUThreads; i++) {
-				threadList.push_back(boost::thread(tryKeyRandom));
+		        cout << "Trying random key on CPU Thread "<< (i+1) << endl;
+				threadList.push_back(boost::thread(tryKeyRandom, i));
+				//boost::this_thread::sleep(boost::posix_time::milliseconds(10));
 			}
+
 
 			for (unsigned int i=0; i<threadList.size(); i++) {
 				threadList[i].join();
