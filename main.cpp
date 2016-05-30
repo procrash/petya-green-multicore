@@ -38,7 +38,7 @@ using namespace std;
 
 bool shutdownRequested = false;
 
-unsigned long nrOfKeysSearched = 0;
+unsigned long long nrOfKeysSearched = 0;
 char* veribuf;
 char* nonce;
 
@@ -109,12 +109,12 @@ void setupSignalHandler() {
 
 }
 
-void printTimeEstimation(unsigned long keysCalculated, unsigned long nrOfSecondsInTotalMeasured) {
-	unsigned long totalSecondsToCalculateAllKeys = (pow(2*26+10,8) / keysCalculated)*nrOfSecondsInTotalMeasured;
-	unsigned long years = totalSecondsToCalculateAllKeys /60/60/24/365;
-	unsigned long days = (totalSecondsToCalculateAllKeys /60/60/24)-years*365;
-	unsigned long hours = (totalSecondsToCalculateAllKeys /60/60)-(years*365*24+days*24);
-	unsigned long minutes = (totalSecondsToCalculateAllKeys /60)-(years*365*24*60+days*24*60+hours*60);
+void printTimeEstimation(unsigned long long keysCalculated, unsigned long long nrOfSecondsInTotalMeasured) {
+	unsigned long long totalSecondsToCalculateAllKeys = (pow(2*26+10,8) / keysCalculated)*nrOfSecondsInTotalMeasured;
+	unsigned long long years = totalSecondsToCalculateAllKeys /60/60/24/365;
+	unsigned long long days = (totalSecondsToCalculateAllKeys /60/60/24)-years*365;
+	unsigned long long hours = (totalSecondsToCalculateAllKeys /60/60)-(years*365*24+days*24);
+	unsigned long long minutes = (totalSecondsToCalculateAllKeys /60)-(years*365*24*60+days*24*60+hours*60);
 
 	std::cout << years << " years" << endl;
 	std::cout << days << " days" << endl;
@@ -125,7 +125,12 @@ void printTimeEstimation(unsigned long keysCalculated, unsigned long nrOfSeconds
 
 int main(int argc, char *argv[])
 {
-
+	unsigned long long totalKeyRange = 2 * 26 + 10;
+	
+	for (int i = 0; i < 7; i++) {
+		totalKeyRange *= 2 * 26 + 10;
+	}
+	// (unsigned long)pow((2 * 26 + 10), 8);
 
 	std::string appName = boost::filesystem::basename(argv[0]);
 
@@ -136,16 +141,16 @@ int main(int argc, char *argv[])
 
 	po::options_description generic("Options");
 	generic.add_options()
-	    ("help,h", "display help message")
-		("version,v", "output the version number")
+	    ("help", "display help message")
+		("version", "output the version number")
 	    ("file", po::value<string>(), "filename which contains disk dump of crypted harddrive (does only need to be the first 57 sectors)")
 	    ("gpu", po::bool_switch(&enableGPU)->default_value(true), "keys are calculated on gpu (notice if you specify both option gpu and cpu is used to calculute the keys)")
 	    ("cpu", po::bool_switch(&enableCPU)->default_value(false), "keys are calculated on cpu")
 
 		("resume", "resume previous calculation")
-		("random,rnd", "use a random key instead of brute force mothod, notice this doesn't allow a resume as wrong keys are not stored")
-	    ("key,k", po::value<string>(), "try a specific key")
-	    ("selftest,st", "check if algorithms work")
+		("random", "use a random key instead of brute force mothod, notice this doesn't allow a resume as wrong keys are not stored")
+	    ("key", po::value<string>(), "try a specific key")
+	    ("selftest", "check if algorithms work")
 	    ("performance", "provide information about performance")
 
 	;
@@ -154,7 +159,7 @@ int main(int argc, char *argv[])
 	optionalGPU.add_options()
 		("gpu_threads", po::value<unsigned int>()->default_value(1024), "number of threads to use on GPU")
 	    ("gpu_blocks", po::value<unsigned int>()->default_value(1), "number of blocks to use on GPU")
-	    ("gpu_keysCtxSwitch", po::value<unsigned long>()->default_value(10000), "number keys which are calculated on a the gpu before the context switches back to host")
+	    ("gpu_keysCtxSwitch", po::value<unsigned long long>()->default_value(10000), "number keys which are calculated on a the gpu before the context switches back to host")
 	;
 
 	po::options_description optionalCPU("Optional GPU Arguments");
@@ -164,8 +169,8 @@ int main(int argc, char *argv[])
 
 	po::options_description optionalGeneric("Optional Generic Arguments");
 	optionalGeneric.add_options()
-		("start_key", po::value<unsigned long>()->default_value(0), "start key number (defaults to 0)")
-	    ("nrOfkeysToCalculate", po::value<unsigned long>()->default_value(pow((2*26+10), 8)), "nr of keys which should be calculated before program ends [defaults to all key combinations (2*26+10)^8]")
+		("start_key", po::value<unsigned long long>()->default_value(0), "start key number (defaults to 0)")
+	    ("nrOfKeysToCalculate", po::value<unsigned long long>()->default_value(totalKeyRange), "nr of keys which should be calculated before program ends [defaults to all key combinations (2*26+10)^8]")
 	;
 
 	po::positional_options_description positionalOptions;
@@ -205,12 +210,12 @@ int main(int argc, char *argv[])
 
 			cout << "However based upon your current selected configuration and hardware I try to do a rough time estimation for a brute force attack" << endl;
 
-			unsigned long ctxSwitchKeys = vm["gpu_keysCtxSwitch"].as<unsigned long>();
-			unsigned long nrThreads = vm["gpu_threads"].as<unsigned int>();
-			unsigned long nrBlocks = vm["gpu_blocks"].as<unsigned int>();
+			unsigned long long ctxSwitchKeys = vm["gpu_keysCtxSwitch"].as<unsigned long long>();
+			unsigned long long nrThreads = vm["gpu_threads"].as<unsigned int>();
+			unsigned long long nrBlocks = vm["gpu_blocks"].as<unsigned int>();
 
-			unsigned long nrOfGPUKeysCalculated = 0;
-			unsigned long nrOfSecondsInTotalMeasuredOnGPU =0;
+			unsigned long long nrOfGPUKeysCalculated = 0;
+			unsigned long long nrOfSecondsInTotalMeasuredOnGPU =0;
 
 		    cout << endl;
 			cout << "Launching Performance Test with "<< endl;
@@ -227,10 +232,10 @@ int main(int argc, char *argv[])
 
 			printTimeEstimation(nrOfGPUKeysCalculated, nrOfSecondsInTotalMeasuredOnGPU);
 
-			unsigned long cpuThreads = vm["cpu_threads"].as<unsigned int>();
+			unsigned long long cpuThreads = vm["cpu_threads"].as<unsigned int>();
 
-			unsigned long nrOfCPUKeysCalculated = 0;
-			unsigned long nrOfSecondsInTotalMeasuredOnCPU =0;
+			unsigned long long nrOfCPUKeysCalculated = 0;
+			unsigned long long nrOfSecondsInTotalMeasuredOnCPU =0;
 			measureCPUPerformance(cpuThreads, &nrOfCPUKeysCalculated, &nrOfSecondsInTotalMeasuredOnCPU);
 
 			cout << endl;
@@ -371,13 +376,13 @@ int main(int argc, char *argv[])
 			printf("Checking key generator...");
 			srand(time(NULL));
 
-			unsigned long randomKeyIndex;
-			unsigned long resultKeyIndex;
+			unsigned long long randomKeyIndex;
+			unsigned long long resultKeyIndex;
 
 			bool checkOk = true;
-			for (unsigned long i=0; i<10000; i++) {
+			for (unsigned long long i=0; i<10000; i++) {
 				char key[17];
-				randomKeyIndex = rand() % (unsigned long)(pow(2*26+10,8));
+				randomKeyIndex = rand() % (unsigned long long)(pow(2*26+10,8));
 
 				calculate16ByteKeyFromIndex(randomKeyIndex, key);
 				resultKeyIndex = calculateIndexFrom16ByteKey(key);
@@ -473,7 +478,7 @@ int main(int argc, char *argv[])
 
 		if (enableCPU && enableGPU) {
 
-			cout << "JJJJ" << endl;
+			cout << "CPU+GPU in combination is currently unsupported" << endl;
 			io_service.stop();
 			return 0;
 		}
@@ -504,29 +509,27 @@ int main(int argc, char *argv[])
 
 			unsigned int gpuThreads = vm["gpu_threads"].as<unsigned int>();;
 			unsigned int gpuBlocks = vm["gpu_blocks"].as<unsigned int>();;
-			unsigned long ctxSwitchKeys = vm["gpu_keysCtxSwitch"].as<unsigned long>();
+			unsigned long long ctxSwitchKeys = vm["gpu_keysCtxSwitch"].as<unsigned long long>();
 
 			unsigned int nrKeys = gpuThreads*gpuBlocks;
 			char *keys = (char *) malloc(nrKeys*sizeof(char)*KEY_SIZE);
 			bool *result = (bool *) malloc(nrKeys*sizeof(bool)*KEY_SIZE);
 
-			unsigned long startKey = vm["start_key"].as<unsigned long>();
-			unsigned long nrOfkeysToCalculate = vm["nrOfkeysToCalculate"].as<unsigned long>();
+			unsigned long long startKey = vm["start_key"].as<unsigned long long>();
+			unsigned long long nrOfKeysToCalculate = vm["nrOfKeysToCalculate"].as<unsigned long long>();
 
 			unsigned int currentKeyIndex = startKey;
 			char *currentKey = keys;
 
-			unsigned long blockSize = nrOfkeysToCalculate / nrKeys;
+			unsigned long long blockSize = nrOfKeysToCalculate / nrKeys;
 
 			if (blockSize==0) blockSize=1;
 
 			for (int i=0; i<nrKeys; i++) {
 				calculate16ByteKeyFromIndex(currentKeyIndex, currentKey);
 				currentKey+=KEY_SIZE;
-				currentKeyIndex += nrOfkeysToCalculate / nrKeys;
+				currentKeyIndex += nrOfKeysToCalculate / nrKeys;
 			}
-
-			cout << "HAHAHAH"<<endl;
 
 			tryKeysGPUMultiShot(gpuBlocks,
 								gpuThreads,
@@ -535,7 +538,7 @@ int main(int argc, char *argv[])
 								keys,
 								nrKeys,
 								ctxSwitchKeys,
-								nrOfkeysToCalculate);
+								nrOfKeysToCalculate);
 			io_service.stop();
 
 			return 0;

@@ -10,7 +10,7 @@
 #include "petya.h"
 using namespace std;
 
-static unsigned long keysCalculated = 0;
+static unsigned long long keysCalculated = 0;
 
 
 void tryKeyRandom(int i, char *nonce, char*veribuf) {
@@ -70,17 +70,17 @@ void tryKey(unsigned int threadNr,
 		    char*nonce,
 			char*buf,
 		    char *keys,
-			unsigned long nrOfKeys,
+			unsigned long long nrOfKeys,
 		    char *keyChars,
 		    int *keyToIndexMap,
 		    bool *isValid,
-			unsigned long *threadKeysCalculated) {
+			unsigned long long *threadKeysCalculated) {
 
 //	char veribuf_test[VERIBUF_SIZE];
 
     char *currentKey = keys+threadNr*KEY_SIZE;
 
-    unsigned long thisThreadKeysCalculated=0;
+    unsigned long long thisThreadKeysCalculated=0;
     bool keyFound = false;
 
 	  uint8_t *key = ((uint8_t *)keys) + (threadNr*(KEY_SIZE));
@@ -257,10 +257,10 @@ void tryKey(unsigned int threadNr,
 
 
 
-void measureCPUPerformance(unsigned long nrOfThreads,
-									unsigned long *nrKeysCalculatedResult,
-									unsigned long *nrOfSecondsInTotalMeasured,
-									unsigned long nrSecondsToMeasure = 30) {
+void measureCPUPerformance(unsigned long long nrOfThreads,
+									unsigned long long *nrKeysCalculatedResult,
+									unsigned long long *nrOfSecondsInTotalMeasured,
+									unsigned long long nrSecondsToMeasure = 30) {
 
 
 	keysCalculated = 0;
@@ -298,28 +298,28 @@ void measureCPUPerformance(unsigned long nrOfThreads,
     veribuf[14] = 0xf8;
     veribuf[15] = 0xc2;
 
-    unsigned long nrOfKeys = nrOfThreads;
+    unsigned long long nrOfKeys = nrOfThreads;
 
     char *keys = (char*)malloc(sizeof(char)*KEY_SIZE*nrOfKeys);
 
     bool veribufIsValid = false;
     bool matches = false;
 
-    unsigned long keyBlocks = pow(26*2+10,8)/(nrOfKeys);
+    unsigned long long keyBlocks = pow(26*2+10,8)/(nrOfKeys);
 
     char *currentKey = keys;
-    for (unsigned long i=0; i<nrOfKeys;i++){
+    for (unsigned long long i=0; i<nrOfKeys;i++){
     	calculate16ByteKeyFromIndex(0+i*keyBlocks, currentKey);
     	currentKey+=KEY_SIZE;
     }
 
-    unsigned long *threadKeysCalculated = (unsigned long *)malloc(sizeof(unsigned long)*nrOfThreads);
-    memset(threadKeysCalculated,0, sizeof(unsigned long)*nrOfThreads);
+    unsigned long long *threadKeysCalculated = (unsigned long long *)malloc(sizeof(unsigned long long)*nrOfThreads);
+    memset(threadKeysCalculated,0, sizeof(unsigned long long)*nrOfThreads);
 
 	vector<boost::thread> threadList;
 
-	bool *result = (bool*)malloc(sizeof(bool)*nrOfThreads);
-    memset(result, 0, sizeof(bool)*nrOfThreads);
+	bool *result = (bool*)malloc(sizeof(bool)*(nrOfThreads+1));
+    memset(result, 0, sizeof(bool)*(nrOfThreads+1));
 
 
 

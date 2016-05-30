@@ -14,8 +14,8 @@
 
 #define NR_THREADS 1024
 #define NR_BLOCKS 1
-#define NR_OF_KEYS_CALCULATED_BEFORE_THREAD_RETURNS (unsigned long)10000
-#define NR_KEYS_PER_GPU_CALL (unsigned long)(NR_THREADS*NR_BLOCKS)
+#define NR_OF_KEYS_CALCULATED_BEFORE_THREAD_RETURNS (unsigned long long)10000
+#define NR_KEYS_PER_GPU_CALL (unsigned long long)(NR_THREADS*NR_BLOCKS)
 
 
 // Define this to turn on error checking
@@ -77,7 +77,7 @@ __global__ void gpu_crypt_and_validate(uint8_t *keys,
                             uint32_t buflen,
                             bool *isValid,
 							int nrTotal,
-							unsigned long nrKeysToCalculatePerThreadBeforeReturn,
+							unsigned long long nrKeysToCalculatePerThreadBeforeReturn,
 							char *keyChars,
 							int *keyToIndexMap
 							)
@@ -286,15 +286,15 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer) {
     verificationBuffer_hc = (uint8_t *) malloc(VERIBUF_SIZE*NR_KEYS_PER_GPU_CALL);
     
     // Fill verificationBuffer for each thread...
-    for (unsigned long i=0; i<NR_KEYS_PER_GPU_CALL; i++) {
+    for (unsigned long long i=0; i<NR_KEYS_PER_GPU_CALL; i++) {
     	memcpy(verificationBuffer_hc+i*KEY_SIZE, verificationBuffer, VERIBUF_SIZE);
     }
            
     
-    unsigned long keyBlocks = pow(26*2+10,8)/(NR_THREADS*NR_BLOCKS);
+    unsigned long long keyBlocks = pow(26*2+10,8)/(NR_THREADS*NR_BLOCKS);
     
     
-    for (unsigned long i=0; i<NR_KEYS_PER_GPU_CALL;i++){
+    for (unsigned long long i=0; i<NR_KEYS_PER_GPU_CALL;i++){
     	calculate16ByteKeyFromIndex(0+i*keyBlocks, key+i*KEY_SIZE);
     }
     
@@ -342,7 +342,7 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer) {
 
 
     bool keyFound = false;
-    unsigned long keysCalculated = 0;
+    unsigned long long keysCalculated = 0;
     
     boost::posix_time::time_duration duration;
     boost::posix_time::ptime beginTs = boost::posix_time::second_clock::local_time();
@@ -388,7 +388,7 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer) {
         //printf("Next round\r\n");
 
         // Calculate next keys for next round...
-        for (unsigned long i=0;i<NR_KEYS_PER_GPU_CALL;i++) {
+        for (unsigned long long i=0;i<NR_KEYS_PER_GPU_CALL;i++) {
         	char *currentKey = (key+i*KEY_SIZE); 
         	nextKey16Byte(currentKey);
         }
@@ -396,17 +396,17 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer) {
         keysCalculated += NR_THREADS*NR_BLOCKS*NR_OF_KEYS_CALCULATED_BEFORE_THREAD_RETURNS;
         
         if (keysCalculated%1000000 == 0) {
-        	unsigned long divider = 1000000;
+        	unsigned long long divider = 1000000;
         	// Print estimated time...
             boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();  
             duration = (now-beginTs);
             std::cout << "Diff:" << duration.total_seconds() << endl;
             std::cout << "Based upon this performance all keys will be calculated in " << endl;
             
-            unsigned long years = pow(2*26+10,8)/divider*duration.total_seconds() /60/60/24/365;
-            unsigned long days = (pow(2*26+10,8)/divider*duration.total_seconds() /60/60/24)-years*365;
-            unsigned long hours = (pow(2*26+10,8)/divider*duration.total_seconds() /60/60)-(years*365*24+days*24);
-            unsigned long minutes = (pow(2*26+10,8)/divider*duration.total_seconds() /60)-(years*365*24*60+days*24*60+hours*60);
+            unsigned long long years = pow(2*26+10,8)/divider*duration.total_seconds() /60/60/24/365;
+            unsigned long long days = (pow(2*26+10,8)/divider*duration.total_seconds() /60/60/24)-years*365;
+            unsigned long long hours = (pow(2*26+10,8)/divider*duration.total_seconds() /60/60)-(years*365*24+days*24);
+            unsigned long long minutes = (pow(2*26+10,8)/divider*duration.total_seconds() /60)-(years*365*24*60+days*24*60+hours*60);
             
             std::cout << years << " years" << endl;
             std::cout << days << " days" << endl;
@@ -610,7 +610,7 @@ __global__ void gpu_decryptMultiShot(uint8_t *keys,
                             uint32_t buflen,
                             bool *isValid,
 							int nrTotal,
-							unsigned long nrKeysToCalculatePerThreadBeforeReturn,
+							unsigned long long nrKeysToCalculatePerThreadBeforeReturn,
 							char *keyChars,
 							int *keyToIndexMap)
 {
@@ -826,7 +826,7 @@ void tryKeysGPUSingleShot(unsigned int nrBlocks,
 				uint8_t nonce_hc[8],  
 		        char *verificationBuffer, 
 				char*keys, 
-				unsigned long nrKeys, 
+				unsigned long long nrKeys, 
 				bool *result) {
     
     uint8_t *verificationBuffer_hc;
@@ -838,7 +838,7 @@ void tryKeysGPUSingleShot(unsigned int nrBlocks,
     verificationBuffer_hc = (uint8_t *) malloc(VERIBUF_SIZE*nrKeys);
     
     // Fill verificationBuffer for each thread...
-    for (unsigned long i=0; i<nrKeys; i++) {
+    for (unsigned long long i=0; i<nrKeys; i++) {
     	memcpy(verificationBuffer_hc+i*KEY_SIZE, verificationBuffer, VERIBUF_SIZE);
     }
                     
@@ -877,11 +877,11 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
 				uint8_t nonce_hc[8],  
 		        char *verificationBuffer, 
 				char*keys, 
-				unsigned long nrKeys,
-				unsigned long keysBeforeContextSwitch,
-				unsigned long keysInTotalToCalculate) {
+				unsigned long long nrKeys,
+				unsigned long long keysBeforeContextSwitch,
+				unsigned long long keysInTotalToCalculate) {
     
-	unsigned long nrTotalKeys = pow(26*2+10,8);
+	unsigned long long nrTotalKeys = pow(26*2+10,8);
 	
     uint8_t *verificationBuffer_hc;
     uint8_t *verifbuf_test_dc = NULL;
@@ -913,7 +913,7 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
     verificationBuffer_hc = (uint8_t *) malloc(VERIBUF_SIZE*nrKeys);
     
     // Fill verificationBuffer for each thread...
-    for (unsigned long i=0; i<nrKeys; i++) {
+    for (unsigned long long i=0; i<nrKeys; i++) {
     	memcpy(verificationBuffer_hc+i*KEY_SIZE, verificationBuffer, VERIBUF_SIZE);
     }
                     
@@ -933,7 +933,7 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
 
     
     bool keyFound = false;
-    unsigned long keysCalculated = 0;
+    unsigned long long keysCalculated = 0;
     
     boost::posix_time::time_duration duration;
     boost::posix_time::ptime beginTs = boost::posix_time::second_clock::local_time();
@@ -946,7 +946,9 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
     }
     cout << endl;
     */
-    
+	int lastPrintedPercentRange = -1;
+	int lastPrintedPercentTotal = -1;
+
     do {
     
 		gpu_decryptMultiShot<<<nrBlocks, nrThreads>>>(keys_dc, 
@@ -955,8 +957,8 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
 											 VERIBUF_SIZE, 
 											 result_dc,nrKeys,
 											 keysBeforeContextSwitch,
-											 keyChars,
-											 keyToIndexMap);
+											 keyChars_dc,
+											 keyToIndexMap_dc);
 		CudaCheckError();
 			
 		CudaSafeCall(cudaMemcpy(result, result_dc, sizeof(bool)*(nrKeys+1), cudaMemcpyDeviceToHost));        
@@ -980,16 +982,28 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
 		// Keys for next round should have been already calculated on GPU
 		
 		// Calculate next keys for next round...
-		// for (unsigned long i=0;i<NR_KEYS_PER_GPU_CALL;i++) {
+		// for (unsigned long long i=0;i<NR_KEYS_PER_GPU_CALL;i++) {
 		//	char *currentKey = (key+i*KEY_SIZE); 
 		//	nextKey16Byte(currentKey);
 		// }
 		
-		keysCalculated += nrThreads*nrBlocks*keysBeforeContextSwitch;
+		keysCalculated += (unsigned long long)nrThreads*(unsigned long long)nrBlocks*keysBeforeContextSwitch;
 		
-		if (keysCalculated%1000000 == 0) {
-			cout << (keysCalculated*100/keysInTotalToCalculate) << "% of Job calculated, that's " << keysCalculated*100/nrTotalKeys << " Percent of the whole key range"<< endl;
-		}
+// 		if (keysCalculated%1000000 == 0) {
+			int currentRange = (int)((unsigned long long) (keysCalculated * (unsigned long long)100 / keysInTotalToCalculate));
+			int currentTotal = (int)((unsigned long long)keysCalculated * (unsigned long long)100 / nrTotalKeys);
+
+			if (currentRange > 100) currentRange = 100;
+			if (currentTotal > 100) currentTotal = 100;
+
+
+			if (lastPrintedPercentRange != currentRange || currentTotal != lastPrintedPercentTotal){
+				lastPrintedPercentRange = currentRange;
+				lastPrintedPercentTotal = currentTotal;
+
+				cout << lastPrintedPercentRange << "% of Job calculated, that's " << lastPrintedPercentTotal << "% of the whole key range" << endl;
+			}
+//		}
 		    
     } while (!keyFound &&  keysCalculated<keysInTotalToCalculate);
 
@@ -1014,9 +1028,9 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
 
 void measureGPUPerformance(unsigned int nrBlocks,
 		        unsigned int nrThreads, 
-				unsigned long keysBeforeContextSwitch, 
-				unsigned long *nrKeysCalculatedResult,
-				unsigned long *nrOfSecondsInTotalMeasured,
+				unsigned long long keysBeforeContextSwitch, 
+				unsigned long long *nrKeysCalculatedResult,
+				unsigned long long *nrOfSecondsInTotalMeasured,
 				int nrSecondsToMeasure = 30) {
     
     uint8_t *verificationBuffer_hc;
@@ -1029,14 +1043,14 @@ void measureGPUPerformance(unsigned int nrBlocks,
     int *keyToIndexMap_dc;
 
     
-    unsigned long nrKeys = nrThreads * nrBlocks;
+    unsigned long long nrKeys = nrThreads * nrBlocks;
     bool *result = (bool *)malloc(sizeof(bool)*(nrKeys+1));
     char*keys = (char*) malloc(sizeof(char)*nrKeys*KEY_SIZE);
     
     memset(result, 0, sizeof(bool)*(nrKeys+1));
     
     	
-    unsigned long keysCalculated = 0;
+    unsigned long long keysCalculated = 0;
 
 	uint8_t nonce_hc[8];
     char *verificationBuffer = (char *)malloc(VERIBUF_SIZE);
@@ -1085,16 +1099,16 @@ void measureGPUPerformance(unsigned int nrBlocks,
     
 	
     // Fill verificationBuffer for each thread...
-    for (unsigned long i=0; i<nrKeys; i++) {
+    for (unsigned long long i=0; i<nrKeys; i++) {
     	memcpy(verificationBuffer_hc+i*KEY_SIZE, verificationBuffer, VERIBUF_SIZE);
     }
     
     
 	// memset(keys,'0', nrKeys*KEY_SIZE);
-    unsigned long keyBlocks = pow(26*2+10,8)/(nrKeys);
+    unsigned long long keyBlocks = pow(26*2+10,8)/(nrKeys);
     
     char *currentKey = keys;
-    for (unsigned long i=0; i<nrKeys;i++){
+    for (unsigned long long i=0; i<nrKeys;i++){
     	calculate16ByteKeyFromIndex(0+i*keyBlocks, currentKey);
     	currentKey+=KEY_SIZE;
     }
