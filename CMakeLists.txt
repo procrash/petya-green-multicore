@@ -9,6 +9,8 @@ set (hdrs
     CustomOptionDescription.h
     OptionPrinter.h
     keyCandidateDistributor.h
+    cpu_code.h
+    globals.h
     )
 
 set (srcs
@@ -18,12 +20,13 @@ set (srcs
     util.cpp
     gpu_code.cu
 #    gpu_code.cpp
+    cpu_code.cpp
     CustomOptionDescription.cpp
     OptionPrinter.cpp
     keyCandidateDistributor.cpp
     )
 
-set(CMAKE_BUILD_TYPE Debug)
+#set(CMAKE_BUILD_TYPE Debug)
 
 # Pass options to NVCC
 set(

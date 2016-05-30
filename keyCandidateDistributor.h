@@ -3,6 +3,7 @@
 #include <map>
 #include<math.h>
 #include <iostream>
+#include "petya.h"
 
 // -- 16 Byte Key funtions...
 
@@ -98,3 +99,19 @@ inline void nextKey16Byte(char *key) {
 	printf("Next key of %s is %s\r\n",oldKeyDebug, keyDebug);
 	*/
 }
+
+inline void make_random_key(char* key)
+{
+    size_t charset_len = strlen(KEY_CHARSET);
+
+    memset(key, 'x', KEY_SIZE);
+
+    for (int i = 0; i < KEY_SIZE; i+=4) {
+        size_t rand_i1 = rand() % charset_len;
+        size_t rand_i2 = rand() % charset_len;
+        key[i] = KEY_CHARSET[rand_i1];
+        key[i+1] = KEY_CHARSET[rand_i2];
+    }
+    key[KEY_SIZE] = 0;
+}
+

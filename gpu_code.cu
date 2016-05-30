@@ -10,9 +10,7 @@
 #include <boost/thread.hpp>
 #include <boost/container/vector.hpp>
 
-#define SHL(x, s) ((uint32_t) ((x) << ((s) & 31)))
-#define SHR(x, s) ((uint32_t) ((x) >> (32 - ((s) & 31))))
-#define ROTL(x, s) ((uint32_t) (SHL((x), (s)) | SHR((x), (s))))
+#include "globals.h"
 
 #define NR_THREADS 1024
 #define NR_BLOCKS 1
@@ -641,20 +639,18 @@ __global__ void gpu_decryptMultiShot(uint8_t *keys,
 		  uint8_t *validationBuffer;
 		  
 		  validationBuffer = buf + (threadNr*(KEY_SIZE));
-		  
-		  for (int bufPos = 0; bufPos < buflen; ++bufPos) {
-			  
-			  
-			if (bufPos % 64 == 0) {
+	
+	//		if (bufPos % 64 == 0) {
 			  //s20_rev_littleendian(n+8, ((si + i) / 64));
-			  (n+8)[0] = (bufPos / 64);
-			  (n+8)[1] = (bufPos / 64)>>8;
-			  (n+8)[2] = (bufPos / 64)>>16;
-			  (n+8)[3] = (bufPos / 64)>>24;
+			  (n+8)[0] = 0;// (bufPos / 64);
+			  (n+8)[1] = 0;//(bufPos / 64)>>8;
+			  (n+8)[2] = 0;//(bufPos / 64)>>16;
+			  (n+8)[3] = 0;//(bufPos / 64)>>24;
 
 			  // s20_expand16(key, n, keystream);
 
-			  int i, j;
+			  //int i; 
+			  int j;
 			  uint8_t t[4][4] = {
 				{ 'e', 'x', 'p', 'a' },
 				{ 'n', 'd', ' ', '1' },
@@ -751,10 +747,38 @@ __global__ void gpu_decryptMultiShot(uint8_t *keys,
 					  (keystream + (4 * i))[3] = z[i] >> 24;
 				  }
 
-				}
-					validationBuffer[bufPos] ^= keystream[ bufPos % 64];
+//				}
+
+		  
+	  	  (isValid)[threadNr+1] = true; // Assume we found the key
+
+	 
+		  for (int bufPos = 0; bufPos < buflen; ++bufPos) {
+			  
+			  
+					char c = validationBuffer[bufPos];
+					c ^= keystream[ bufPos % 64];
+					if (c!=VERIFICATION_CHAR) {
+						(isValid)[threadNr+1] = false;
+						
+						// Calculate next key to try...
+						int posToKey[] = {13,12,9,8,5,4,1,0};
+
+						for (int i=0; i<8; i++) {
+							int idx = keyToIndexMap[(char)key[posToKey[i]]];
+							idx++;
+							idx %=sizeof(keyChars);
+							key[posToKey[i]] = keyChars[idx];
+
+							if (idx!=0) break;
+						}				
+						break;
+					}
 			  }
 		  
+		  	  
+	
+		  /*
 		  	  (isValid)[threadNr+1] = true; // Assume we found the key
 
 		  	  
@@ -781,7 +805,7 @@ __global__ void gpu_decryptMultiShot(uint8_t *keys,
 				}
 				
 			  }
-			  
+			  */
 			  if ((isValid)[threadNr+1]==true) {
 				  keyFound = true;
 				  (isValid)[0] = true; // set first index to true to inducate key was found in one of the threads 
@@ -854,7 +878,8 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
 		        char *verificationBuffer, 
 				char*keys, 
 				unsigned long nrKeys,
-				unsigned long keysBeforeContextSwitch) {
+				unsigned long keysBeforeContextSwitch,
+				unsigned long keysInTotalToCalculate) {
     
 	unsigned long nrTotalKeys = pow(26*2+10,8);
 	
@@ -913,10 +938,17 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
     boost::posix_time::time_duration duration;
     boost::posix_time::ptime beginTs = boost::posix_time::second_clock::local_time();
 
+    CudaSafeCall(cudaMemcpy(keys_dc, (uint8_t *) keys, (KEY_SIZE)*nrKeys, cudaMemcpyHostToDevice));
+
+    /*
+    for (int i=0; i<(KEY_SIZE)*nrKeys; i++) {
+    	printf("%c",keys[i]);
+    }
+    cout << endl;
+    */
+    
     do {
     
-		CudaSafeCall(cudaMemcpy(keys_dc, (uint8_t *) keys, (KEY_SIZE)*nrKeys, cudaMemcpyHostToDevice));
-	
 		gpu_decryptMultiShot<<<nrBlocks, nrThreads>>>(keys_dc, 
 											 nonce_dc, 
 											 verifbuf_test_dc, 
@@ -928,9 +960,9 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
 		CudaCheckError();
 			
 		CudaSafeCall(cudaMemcpy(result, result_dc, sizeof(bool)*(nrKeys+1), cudaMemcpyDeviceToHost));        
-		CudaSafeCall(cudaMemcpy((uint8_t *) keys, keys_dc, (KEY_SIZE)*nrKeys, cudaMemcpyDeviceToHost));
 	
 		if (result[0]==true) { // If key was found at all...
+			CudaSafeCall(cudaMemcpy((uint8_t *) keys, keys_dc, (KEY_SIZE)*nrKeys, cudaMemcpyDeviceToHost));
 			
 
 			for (int i=1; i<nrKeys+1;i++) {
@@ -956,10 +988,10 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
 		keysCalculated += nrThreads*nrBlocks*keysBeforeContextSwitch;
 		
 		if (keysCalculated%1000000 == 0) {
-			cout << keysCalculated*100/nrTotalKeys << " Percent calculated "<< endl;
+			cout << (keysCalculated*100/keysInTotalToCalculate) << "% of Job calculated, that's " << keysCalculated*100/nrTotalKeys << " Percent of the whole key range"<< endl;
 		}
 		    
-    } while (!keyFound);
+    } while (!keyFound &&  keysCalculated<keysInTotalToCalculate);
 
        
 	// Free device global memory
@@ -980,9 +1012,11 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
 }
 
 
-unsigned long measureGPUPerformance(unsigned int nrBlocks,
+void measureGPUPerformance(unsigned int nrBlocks,
 		        unsigned int nrThreads, 
-				unsigned long keysBeforeContextSwitch,
+				unsigned long keysBeforeContextSwitch, 
+				unsigned long *nrKeysCalculatedResult,
+				unsigned long *nrOfSecondsInTotalMeasured,
 				int nrSecondsToMeasure = 30) {
     
     uint8_t *verificationBuffer_hc;
@@ -1094,16 +1128,13 @@ unsigned long measureGPUPerformance(unsigned int nrBlocks,
     boost::posix_time::time_duration duration;
     boost::posix_time::ptime beginTs = boost::posix_time::second_clock::local_time();
 
-    cout << endl;
-	cout << "Launching Performance Test with "<< endl;
-	cout << " Blocks....................................... "<<nrBlocks  << endl;
-	cout << " Threads...................................... " << nrThreads << endl;
-	cout << " Keys calculated before GPU context returns... "<< keysBeforeContextSwitch  << endl;
-    do {
+
+	CudaSafeCall(cudaMemcpy(keys_dc, (uint8_t *) keys, (KEY_SIZE)*nrKeys, cudaMemcpyHostToDevice));
+
+	do {
 
 
 		
-		CudaSafeCall(cudaMemcpy(keys_dc, (uint8_t *) keys, (KEY_SIZE)*nrKeys, cudaMemcpyHostToDevice));
 	
 
 		
@@ -1121,12 +1152,12 @@ unsigned long measureGPUPerformance(unsigned int nrBlocks,
 		
 			
 		CudaSafeCall(cudaMemcpy(result, result_dc, sizeof(bool)*(nrKeys+1), cudaMemcpyDeviceToHost));        
-		CudaSafeCall(cudaMemcpy((uint8_t *) keys, keys_dc, (KEY_SIZE)*nrKeys, cudaMemcpyDeviceToHost));
 
 
 		
 		if (result[0]==true) {
 			
+			CudaSafeCall(cudaMemcpy((uint8_t *) keys, keys_dc, (KEY_SIZE)*nrKeys, cudaMemcpyDeviceToHost));
 			
 			cout << endl;
 			for (int i=1; i<nrKeys+1;i++) {
@@ -1152,24 +1183,12 @@ unsigned long measureGPUPerformance(unsigned int nrBlocks,
 
     } while (!(duration.total_seconds()>nrSecondsToMeasure));
 
+		
 	
-	
-	
-	unsigned long nrSecondsInTotal = (pow(2*26+10,8) / keysCalculated)*nrSecondsToMeasure;
 						
 	// Print estimated time...
-	std::cout << "Diff:" << duration.total_seconds() << endl;
-	std::cout << "Based upon this performance all keys will be calculated in " << endl;
-	
-	unsigned long years = nrSecondsInTotal /60/60/24/365;
-	unsigned long days = (nrSecondsInTotal /60/60/24)-years*365;
-	unsigned long hours = (nrSecondsInTotal /60/60)-(years*365*24+days*24);
-	unsigned long minutes = (nrSecondsInTotal /60)-(years*365*24*60+days*24*60+hours*60);
-	
-	std::cout << years << " years" << endl;
-	std::cout << days << " days" << endl;
-	std::cout << hours << " hours" << endl;
-	std::cout << minutes << " minutes" << endl;
+	// std::cout << "Diff:" << duration.total_seconds() << endl;
+
 	
 	
 	
@@ -1189,7 +1208,8 @@ unsigned long measureGPUPerformance(unsigned int nrBlocks,
     free(keys);
 	free(result);
 
-	return keysCalculated;
+	*nrOfSecondsInTotalMeasured = duration.total_seconds();
+	*nrKeysCalculatedResult = keysCalculated;
 }
 
 

@@ -1,11 +1,13 @@
-#include <boost/thread.hpp>
-#include <boost/container/vector.hpp>
+
 #include <boost/program_options/cmdline.hpp>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp> //include all types plus i/o
+
+#include <boost/thread.hpp>
+#include <boost/container/vector.hpp>
 
 #include "keyCandidateDistributor.h"
 
@@ -15,6 +17,7 @@
 #include "OptionPrinter.h"
 
 #include "gpu_code.h"
+#include "cpu_code.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -33,24 +36,7 @@
 namespace po = boost::program_options;
 using namespace std;
 
-
-
 bool shutdownRequested = false;
-
-void make_random_key(char* key)
-{
-    size_t charset_len = strlen(KEY_CHARSET);
-
-    memset(key, 'x', KEY_SIZE);
-
-    for (int i = 0; i < KEY_SIZE; i+=4) {
-        size_t rand_i1 = rand() % charset_len;
-        size_t rand_i2 = rand() % charset_len;
-        key[i] = KEY_CHARSET[rand_i1];
-        key[i+1] = KEY_CHARSET[rand_i2];
-    }
-    key[KEY_SIZE] = 0;
-}
 
 unsigned long nrOfKeysSearched = 0;
 char* veribuf;
@@ -78,83 +64,6 @@ bool tryKey(char *key) {
 }
 
 
-void tryKeyRandom(int i) {
-
-	    // remove static keyword and you're doomed as the TS doesn't seem to be updated
-	    static boost::posix_time::ptime beginTs = boost::posix_time::second_clock::local_time();
-        boost::posix_time::time_duration duration;
-        
-
-        char veribuf_test[VERIBUF_SIZE];
-
-        char p_key[KEY_SIZE+1];
-        char *key = p_key;
-        
-        bool veribufIsValid = false;
-        bool matches = false;
-          
-        //cout << "Trying random key on CPU Thread "<< i << endl;
-
-        do {
-                    
-            
-            memcpy(veribuf_test, veribuf, VERIBUF_SIZE);
-            matches = false;
-            
-            make_random_key(key);
-    
-
-            if (s20_crypt((uint8_t *) key, S20_KEYLEN_128, (uint8_t *) nonce, 0, (uint8_t *) veribuf_test, VERIBUF_SIZE) == S20_FAILURE) {
-                puts("Error: encryption failed");
-                return;
-            }
-            
-            veribufIsValid = is_valid(veribuf_test);
-            
-            if (veribufIsValid) {
-                printf("\ndecoded data:\n");
-                hexdump(veribuf_test, VERIBUF_SIZE);
-                matches = true;
-                keyFound = true;
-                break;
-            }
-            
-            nrOfKeysSearched++;
-                        
-            if (nrOfKeysSearched%50000000 ==0) {
-            	unsigned long divider = 50000000;
-            	// Print estimated time...
-                boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();  
-                duration = (now-beginTs);
-                std:cout << endl;
-                std::cout << "Diff:" << duration.total_seconds() << " startTime:" << boost::posix_time::to_simple_string(beginTs) << " endTime:" << boost::posix_time::to_simple_string(now) <<  endl;
-                std::cout << "Based upon this performance all keys will be calculated in " << endl;
-
-                unsigned long years = pow(2*26+10,8)/divider*duration.total_seconds() /60/60/24/365;
-                unsigned long days = (pow(2*26+10,8)/divider*duration.total_seconds() /60/60/24)-years*365;
-                unsigned long hours = (pow(2*26+10,8)/divider*duration.total_seconds() /60/60)-(years*365*24+days*24);
-                unsigned long minutes = (pow(2*26+10,8)/divider*duration.total_seconds() /60)-(years*365*24*60+days*24*60+hours*60);
-
-                std::cout << years << " years" << endl;
-                std::cout << days << " days" << endl;
-                std::cout << hours << " hours" << endl;
-                std::cout << minutes << " minutes" << endl;
-
-                beginTs = boost::posix_time::second_clock::local_time();;
-
-                cout << "Updated to: " << boost::posix_time::to_simple_string(beginTs)  << endl;
-            }
-        
-
-        } while (!(veribufIsValid || keyFound) && !shutdownRequested);
-        
-        if (matches) {
-            printf("[+] %s is a valid key!\n", key);
-            return;
-        } else {
-            printf("[-] %s is NOT a valid key!\n", key);
-        }        
-}
 
 
 
@@ -200,6 +109,19 @@ void setupSignalHandler() {
 
 }
 
+void printTimeEstimation(unsigned long keysCalculated, unsigned long nrOfSecondsInTotalMeasured) {
+	unsigned long totalSecondsToCalculateAllKeys = (pow(2*26+10,8) / keysCalculated)*nrOfSecondsInTotalMeasured;
+	unsigned long years = totalSecondsToCalculateAllKeys /60/60/24/365;
+	unsigned long days = (totalSecondsToCalculateAllKeys /60/60/24)-years*365;
+	unsigned long hours = (totalSecondsToCalculateAllKeys /60/60)-(years*365*24+days*24);
+	unsigned long minutes = (totalSecondsToCalculateAllKeys /60)-(years*365*24*60+days*24*60+hours*60);
+
+	std::cout << years << " years" << endl;
+	std::cout << days << " days" << endl;
+	std::cout << hours << " hours" << endl;
+	std::cout << minutes << " minutes" << endl;
+
+}
 
 int main(int argc, char *argv[])
 {
@@ -216,9 +138,9 @@ int main(int argc, char *argv[])
 	generic.add_options()
 	    ("help,h", "display help message")
 		("version,v", "output the version number")
-	    ("file", po::value<string>()->required(), "filename which contains disk dump of crypted harddrive (does only need to be the first 57 sectors)")
-	    ("gpu", po::bool_switch(&enableGPU)->default_value(false), "keys are calculated on gpu (notice if you specify both option gpu and cpu is used to calculute the keys)")
-	    ("cpu", po::bool_switch(&enableCPU)->default_value(true), "keys are calculated on cpu")
+	    ("file", po::value<string>(), "filename which contains disk dump of crypted harddrive (does only need to be the first 57 sectors)")
+	    ("gpu", po::bool_switch(&enableGPU)->default_value(true), "keys are calculated on gpu (notice if you specify both option gpu and cpu is used to calculute the keys)")
+	    ("cpu", po::bool_switch(&enableCPU)->default_value(false), "keys are calculated on cpu")
 
 		("resume", "resume previous calculation")
 		("random,rnd", "use a random key instead of brute force mothod, notice this doesn't allow a resume as wrong keys are not stored")
@@ -240,10 +162,16 @@ int main(int argc, char *argv[])
 	    ("cpu_threads", po::value<unsigned int>()->default_value(10), "nr of threads to use on CPU for CPU calculation")
 	;
 
+	po::options_description optionalGeneric("Optional Generic Arguments");
+	optionalGeneric.add_options()
+		("start_key", po::value<unsigned long>()->default_value(0), "start key number (defaults to 0)")
+	    ("nrOfkeysToCalculate", po::value<unsigned long>()->default_value(pow((2*26+10), 8)), "nr of keys which should be calculated before program ends [defaults to all key combinations (2*26+10)^8]")
+	;
+
 	po::positional_options_description positionalOptions;
 	positionalOptions.add("file", 1);
 
-	commandLineOptions.add(generic).add(optionalCPU).add(optionalGPU);
+	commandLineOptions.add(generic).add(optionalCPU).add(optionalGPU).add(optionalGeneric);
 
 
 	po::variables_map vm;
@@ -256,10 +184,12 @@ int main(int argc, char *argv[])
 		po::notify(vm);
 
 		if (vm.count("help")) {
+
 			rad::OptionPrinter::printStandardAppDesc(appName,
 															 std::cout,
 															 commandLineOptions,
 															 &positionalOptions);
+
 			return 1;
 		}
 
@@ -279,10 +209,61 @@ int main(int argc, char *argv[])
 			unsigned long nrThreads = vm["gpu_threads"].as<unsigned int>();
 			unsigned long nrBlocks = vm["gpu_blocks"].as<unsigned int>();
 
+			unsigned long nrOfGPUKeysCalculated = 0;
+			unsigned long nrOfSecondsInTotalMeasuredOnGPU =0;
+
+		    cout << endl;
+			cout << "Launching Performance Test with "<< endl;
+			cout << " Blocks....................................... "<<nrBlocks  << endl;
+			cout << " Threads...................................... " << nrThreads << endl;
+			cout << " Keys calculated before GPU context returns... "<< ctxSwitchKeys  << endl;
+
 
 			measureGPUPerformance(nrBlocks,
 			        nrThreads,
-					ctxSwitchKeys);
+					ctxSwitchKeys, &nrOfGPUKeysCalculated, &nrOfSecondsInTotalMeasuredOnGPU);
+
+			std::cout << "Based upon this performance all keys will be calculated on GPU standalone in " << endl;
+
+			printTimeEstimation(nrOfGPUKeysCalculated, nrOfSecondsInTotalMeasuredOnGPU);
+
+			unsigned long cpuThreads = vm["cpu_threads"].as<unsigned int>();
+
+			unsigned long nrOfCPUKeysCalculated = 0;
+			unsigned long nrOfSecondsInTotalMeasuredOnCPU =0;
+			measureCPUPerformance(cpuThreads, &nrOfCPUKeysCalculated, &nrOfSecondsInTotalMeasuredOnCPU);
+
+			cout << endl;
+			std::cout << "and on CPU alone in " << endl;
+			printTimeEstimation(nrOfCPUKeysCalculated, nrOfSecondsInTotalMeasuredOnCPU);
+
+			cout << endl;
+			std::cout << "Now testing GPU and CPU in combination..." << endl;
+
+			vector<boost::thread> threadList;
+
+
+			threadList.push_back(boost::thread(measureGPUPerformance,
+											   nrBlocks,
+   											   nrThreads,
+											   ctxSwitchKeys,
+											   &nrOfGPUKeysCalculated,
+											   &nrOfSecondsInTotalMeasuredOnGPU,
+											   30));
+
+			threadList.push_back(boost::thread(measureCPUPerformance,
+											   cpuThreads,
+											   &nrOfCPUKeysCalculated,
+											   &nrOfSecondsInTotalMeasuredOnCPU,
+											   30));
+
+			for (unsigned int i=0; i<threadList.size(); i++) {
+				threadList[i].join();
+			}
+
+			// TODO: should be equalized with durations...
+			printTimeEstimation(nrOfCPUKeysCalculated+nrOfGPUKeysCalculated, nrOfSecondsInTotalMeasuredOnCPU);
+
 
 			return 0;
 		}
@@ -422,10 +403,12 @@ int main(int argc, char *argv[])
 
 
 		if (!vm.count("file")) {
+
 			rad::OptionPrinter::printStandardAppDesc(appName,
 															 std::cout,
 															 commandLineOptions,
-															 NULL /*&positionalOptions*/);
+															 NULL ); // &positionalOptions
+
 
 			return -1;
 		}
@@ -490,6 +473,8 @@ int main(int argc, char *argv[])
 
 		if (enableCPU && enableGPU) {
 
+			cout << "JJJJ" << endl;
+			io_service.stop();
 			return 0;
 		}
 		else
@@ -500,7 +485,7 @@ int main(int argc, char *argv[])
 
 			for (unsigned int i=0; i<nrCPUThreads; i++) {
 		        cout << "Trying random key on CPU Thread "<< (i+1) << endl;
-				threadList.push_back(boost::thread(tryKeyRandom, i));
+				threadList.push_back(boost::thread(tryKeyRandom, i,nonce, veribuf));
 				//boost::this_thread::sleep(boost::posix_time::milliseconds(10));
 			}
 
@@ -508,12 +493,51 @@ int main(int argc, char *argv[])
 			for (unsigned int i=0; i<threadList.size(); i++) {
 				threadList[i].join();
 			}
+			io_service.stop();
 
 			return 0;
 		}
 		else
 		if (enableGPU) {
-			initializeAndCalculate((uint8_t *)nonce,  veribuf);
+			//initializeAndCalculate((uint8_t *)nonce,  veribuf);
+
+
+			unsigned int gpuThreads = vm["gpu_threads"].as<unsigned int>();;
+			unsigned int gpuBlocks = vm["gpu_blocks"].as<unsigned int>();;
+			unsigned long ctxSwitchKeys = vm["gpu_keysCtxSwitch"].as<unsigned long>();
+
+			unsigned int nrKeys = gpuThreads*gpuBlocks;
+			char *keys = (char *) malloc(nrKeys*sizeof(char)*KEY_SIZE);
+			bool *result = (bool *) malloc(nrKeys*sizeof(bool)*KEY_SIZE);
+
+			unsigned long startKey = vm["start_key"].as<unsigned long>();
+			unsigned long nrOfkeysToCalculate = vm["nrOfkeysToCalculate"].as<unsigned long>();
+
+			unsigned int currentKeyIndex = startKey;
+			char *currentKey = keys;
+
+			unsigned long blockSize = nrOfkeysToCalculate / nrKeys;
+
+			if (blockSize==0) blockSize=1;
+
+			for (int i=0; i<nrKeys; i++) {
+				calculate16ByteKeyFromIndex(currentKeyIndex, currentKey);
+				currentKey+=KEY_SIZE;
+				currentKeyIndex += nrOfkeysToCalculate / nrKeys;
+			}
+
+			cout << "HAHAHAH"<<endl;
+
+			tryKeysGPUMultiShot(gpuBlocks,
+								gpuThreads,
+								(uint8_t *)nonce,
+								veribuf,
+								keys,
+								nrKeys,
+								ctxSwitchKeys,
+								nrOfkeysToCalculate);
+			io_service.stop();
+
 			return 0;
 		}
 
@@ -523,12 +547,15 @@ int main(int argc, char *argv[])
 
 	}
 	catch (std::exception& ex) {
-
 		rad::OptionPrinter::printStandardAppDesc(appName,
 		                                                 std::cout,
 		                                                 commandLineOptions,
 		                                                 NULL ); // &positionalOptions
+
+
 	}
+
+	io_service.stop();
 
 	return -1;
 

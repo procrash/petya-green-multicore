@@ -14,9 +14,12 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
 		        char *verificationBuffer,
 				char*keys,
 				unsigned long nrKeys,
-				unsigned long keysBeforeContextSwitch);
+				unsigned long keysBeforeContextSwitch,
+				unsigned long keysInTotalToCalculate);
 
-unsigned long measureGPUPerformance(unsigned int nrBlocks,
+void measureGPUPerformance(unsigned int nrBlocks,
 		        unsigned int nrThreads,
 				unsigned long keysBeforeContextSwitch,
+				unsigned long *nrKeysCalculatedResult,
+				unsigned long *nrOfSecondsInTotalMeasured,
 				int nrSecondsToMeasure = 30);
