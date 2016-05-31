@@ -45,7 +45,7 @@ inline unsigned long long calculateIndexFrom16ByteKey(char*key) {
 
 	for (int i=0; i<255;i++) {
 		charToKeyCharsIndex[i] = 0;
-		for (int j=0; j<sizeof(keyChars); j++) {
+		for (int j=0; j<(2*26+10); j++) {
 			if (keyChars[j]==(char)i) charToKeyCharsIndex[(char)i] = j;
 		}
 	}

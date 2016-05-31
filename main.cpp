@@ -244,6 +244,7 @@ int main(int argc, char *argv[])
 
 			printTimeEstimation(nrOfGPUKeysCalculated, nrOfSecondsInTotalMeasuredOnGPU);
 
+			std::cout << "In Total " <<nrOfGPUKeysCalculated << " keys have been calculated in " << nrOfSecondsInTotalMeasuredOnGPU << " seconds on GPU" << endl;
 			unsigned long long cpuThreads = vm["cpu_threads"].as<unsigned int>();
 
 			unsigned long long nrOfCPUKeysCalculated = 0;
@@ -255,6 +256,8 @@ int main(int argc, char *argv[])
 			cout << endl;
 			std::cout << "and on CPU alone in " << endl;
 			printTimeEstimation(nrOfCPUKeysCalculated, nrOfSecondsInTotalMeasuredOnCPU);
+
+			std::cout << "In Total " << nrOfCPUKeysCalculated << " keys have been calculated in " << nrOfSecondsInTotalMeasuredOnCPU << " seconds on CPU" << endl;
 
 			cout << endl;
 			std::cout << "Now testing GPU and CPU in combination..." << endl;
@@ -288,6 +291,8 @@ int main(int argc, char *argv[])
 
 			// TODO: should be equalized with durations...
 			printTimeEstimation(nrOfCPUKeysCalculated+nrOfGPUKeysCalculated, nrOfSecondsInTotalMeasuredOnCPU);
+			
+			std::cout <<  "In Total " << nrOfCPUKeysCalculated + nrOfGPUKeysCalculated << " keys have been calculated in " << nrOfSecondsInTotalMeasuredOnCPU << " seconds on GPU+CPU" << endl;
 
 
 			return 0;
