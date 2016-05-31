@@ -123,6 +123,14 @@ void printTimeEstimation(unsigned long long keysCalculated, unsigned long long n
 
 }
 
+void checkShutdownRequested(){
+	if (shutdownRequested){
+		io_service.stop();
+		cout << "Program interrupted" << endl;
+		exit(0);
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	unsigned long long totalKeyRange = 2 * 26 + 10;
@@ -179,6 +187,8 @@ int main(int argc, char *argv[])
 	commandLineOptions.add(generic).add(optionalCPU).add(optionalGPU).add(optionalGeneric);
 
 
+	boost::thread signalHUPThread(setupSignalHandler);
+
 	po::variables_map vm;
 
 	try {
@@ -217,6 +227,8 @@ int main(int argc, char *argv[])
 			unsigned long long nrOfGPUKeysCalculated = 0;
 			unsigned long long nrOfSecondsInTotalMeasuredOnGPU =0;
 
+			cout << endl;
+			cout << "Performing some tests now. This will take a up to 5 minutes..." << endl;
 		    cout << endl;
 			cout << "Launching Performance Test with "<< endl;
 			cout << " Blocks....................................... "<<nrBlocks  << endl;
@@ -226,7 +238,7 @@ int main(int argc, char *argv[])
 
 			measureGPUPerformance(nrBlocks,
 			        nrThreads,
-					ctxSwitchKeys, &nrOfGPUKeysCalculated, &nrOfSecondsInTotalMeasuredOnGPU);
+					ctxSwitchKeys, &nrOfGPUKeysCalculated, &nrOfSecondsInTotalMeasuredOnGPU, &shutdownRequested, 30);
 
 			std::cout << "Based upon this performance all keys will be calculated on GPU standalone in " << endl;
 
@@ -236,7 +248,9 @@ int main(int argc, char *argv[])
 
 			unsigned long long nrOfCPUKeysCalculated = 0;
 			unsigned long long nrOfSecondsInTotalMeasuredOnCPU =0;
-			measureCPUPerformance(cpuThreads, &nrOfCPUKeysCalculated, &nrOfSecondsInTotalMeasuredOnCPU);
+			measureCPUPerformance(cpuThreads, &nrOfCPUKeysCalculated, &nrOfSecondsInTotalMeasuredOnCPU, &shutdownRequested, 30);
+
+			checkShutdownRequested();
 
 			cout << endl;
 			std::cout << "and on CPU alone in " << endl;
@@ -254,17 +268,23 @@ int main(int argc, char *argv[])
 											   ctxSwitchKeys,
 											   &nrOfGPUKeysCalculated,
 											   &nrOfSecondsInTotalMeasuredOnGPU,
+											   &shutdownRequested,
 											   30));
 
 			threadList.push_back(boost::thread(measureCPUPerformance,
 											   cpuThreads,
 											   &nrOfCPUKeysCalculated,
 											   &nrOfSecondsInTotalMeasuredOnCPU,
+											   &shutdownRequested,
 											   30));
+
+			
 
 			for (unsigned int i=0; i<threadList.size(); i++) {
 				threadList[i].join();
 			}
+
+			checkShutdownRequested();
 
 			// TODO: should be equalized with durations...
 			printTimeEstimation(nrOfCPUKeysCalculated+nrOfGPUKeysCalculated, nrOfSecondsInTotalMeasuredOnCPU);
@@ -370,7 +390,93 @@ int main(int argc, char *argv[])
 				}
 			}
 
-			if (gpuPassed) printf(" passed\r\n"); else printf(" failed\r\n");
+			if (gpuPassed) {
+
+				unsigned int gpuThreads = vm["gpu_threads"].as<unsigned int>();;
+				unsigned int gpuBlocks = vm["gpu_blocks"].as<unsigned int>();;
+				unsigned long long ctxSwitchKeys = vm["gpu_keysCtxSwitch"].as<unsigned long long>();
+
+				unsigned int nrKeys = gpuThreads*gpuBlocks;
+				char *keys = (char *)malloc(nrKeys*sizeof(char)*KEY_SIZE);
+				bool *result = (bool *)malloc(nrKeys*sizeof(bool)*KEY_SIZE);
+
+				unsigned long long startKey = vm["start_key"].as<unsigned long long>();
+				unsigned long long nrOfKeysToCalculate = vm["nrOfKeysToCalculate"].as<unsigned long long>();
+
+				unsigned int currentKeyIndex = startKey;
+				char *currentKey = keys;
+
+				unsigned long long blockSize = nrOfKeysToCalculate / nrKeys;
+
+				if (blockSize == 0) blockSize = 1;
+
+				for (int i = 0; i<nrKeys; i++) {
+					calculate16ByteKeyFromIndex(currentKeyIndex, currentKey);
+					currentKey += KEY_SIZE;
+					currentKeyIndex += nrOfKeysToCalculate / nrKeys;
+				}
+
+				/*
+				keys[0] = 'n';
+				keys[1] = 'G';
+				keys[2] = 'u';
+				keys[3] = 'J';
+				keys[4] = 'G';
+				keys[5] = 'b';
+				keys[6] = 'm';
+				keys[7] = 'D';
+				keys[8] = 'u';
+				keys[9] = 'V';
+				keys[10] = 'N';
+				keys[11] = '9';
+				keys[12] = 'X';
+				keys[13] = 'm';
+				keys[14] = 'L';
+				keys[15] = 'a';
+				*/
+
+				unsigned long keyIndex = (rand() % nrKeys)*KEY_SIZE;
+
+
+				keys[0 + keyIndex] = 'n';
+				keys[1 + keyIndex] = 'G';
+				keys[2 + keyIndex] = 'u'; //DC
+				keys[3 + keyIndex] = 'J';//DC
+				keys[4 + keyIndex] = 'G';
+				keys[5 + keyIndex] = 'b';
+				keys[6 + keyIndex] = 'm';//DC
+				keys[7 + keyIndex] = '0';//DC
+				keys[8 + keyIndex] = 'u';
+				keys[9 + keyIndex] = '0';
+				keys[10 + keyIndex] = 'N';//DC
+				keys[11 + keyIndex] = '9';//DC
+				keys[12 + keyIndex] = 'X';
+				keys[13 + keyIndex] = 'm';
+				keys[14 + keyIndex] = 'L';//DC
+				keys[15 + keyIndex] = 'a';//DC
+
+
+				
+				bool keyFound = tryKeysGPUMultiShot(gpuBlocks,
+					gpuThreads,
+					(uint8_t *)nonce,
+					veribuf,
+					keys,
+					nrKeys,
+					ctxSwitchKeys,
+					nrOfKeysToCalculate,
+					true,
+					&shutdownRequested);
+				
+				io_service.stop();
+
+				checkShutdownRequested();
+
+
+
+				if (keyFound)  printf(" passed\r\n"); 
+			}
+			else printf(" failed\r\n");
 
 
 			printf("Checking key generator...");
@@ -469,7 +575,7 @@ int main(int argc, char *argv[])
 		}
 
 
-		boost::thread signalHUPThread(setupSignalHandler);
+		
 
 		if (vm.count("random")) {
 			srand(time(NULL));
@@ -538,9 +644,12 @@ int main(int argc, char *argv[])
 								keys,
 								nrKeys,
 								ctxSwitchKeys,
-								nrOfKeysToCalculate);
+								nrOfKeysToCalculate,
+								false, 
+								&shutdownRequested);
 			io_service.stop();
 
+			checkShutdownRequested();
 			return 0;
 		}
 

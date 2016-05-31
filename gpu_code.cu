@@ -237,7 +237,7 @@ __global__ void gpu_crypt_and_validate(uint8_t *keys,
 				for (int i=0; i<8; i++) {
 					int idx = keyToIndexMap[key[posToKey[i]]];
 					idx++;
-					idx %=sizeof(keyChars);
+					idx %= (2 * 26 + 10);
 					key[posToKey[i]] = keyChars[idx];
 
 					if (idx!=0) break;
@@ -329,8 +329,8 @@ void initializeAndCalculate(uint8_t nonce_hc[8],  char *verificationBuffer) {
 
     CudaSafeCall(cudaMalloc((void **)&keyChars_dc, sizeof(keyChars)));
     CudaSafeCall(cudaMemcpy(keyChars_dc, keyChars, sizeof(keyChars), cudaMemcpyHostToDevice));
-    CudaSafeCall(cudaMalloc((void **)&keyToIndexMap_dc, 256));
-    CudaSafeCall(cudaMemcpy(keyToIndexMap_dc, keyToIndexMap, 256, cudaMemcpyHostToDevice));
+    CudaSafeCall(cudaMalloc((void **)&keyToIndexMap_dc, 256*sizeof(int)));
+    CudaSafeCall(cudaMemcpy(keyToIndexMap_dc, keyToIndexMap, 256*sizeof(int), cudaMemcpyHostToDevice));
     CudaSafeCall(cudaMalloc((void **)&key_dc, (KEY_SIZE)*NR_KEYS_PER_GPU_CALL));
     CudaSafeCall(cudaMalloc((void **)&nonce_dc, 8));
     CudaSafeCall(cudaMemcpy(nonce_dc, nonce_hc, 8, cudaMemcpyHostToDevice));
@@ -767,7 +767,7 @@ __global__ void gpu_decryptMultiShot(uint8_t *keys,
 						for (int i=0; i<8; i++) {
 							int idx = keyToIndexMap[(char)key[posToKey[i]]];
 							idx++;
-							idx %=sizeof(keyChars);
+							idx %= (2 * 26 + 10);
 							key[posToKey[i]] = keyChars[idx];
 
 							if (idx!=0) break;
@@ -872,14 +872,16 @@ void tryKeysGPUSingleShot(unsigned int nrBlocks,
 }
 
 
-void tryKeysGPUMultiShot(unsigned int nrBlocks,
+bool tryKeysGPUMultiShot(unsigned int nrBlocks,
 		        unsigned int nrThreads,
 				uint8_t nonce_hc[8],  
 		        char *verificationBuffer, 
 				char*keys, 
 				unsigned long long nrKeys,
 				unsigned long long keysBeforeContextSwitch,
-				unsigned long long keysInTotalToCalculate) {
+				unsigned long long keysInTotalToCalculate,
+				bool supressOutput,
+				bool* shutdownRequested) {
     
 	unsigned long long nrTotalKeys = pow(26*2+10,8);
 	
@@ -928,8 +930,8 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
 
     CudaSafeCall(cudaMalloc((void **)&keyChars_dc, sizeof(keyChars)));
     CudaSafeCall(cudaMemcpy(keyChars_dc, keyChars, sizeof(keyChars), cudaMemcpyHostToDevice));
-    CudaSafeCall(cudaMalloc((void **)&keyToIndexMap_dc, 256));
-    CudaSafeCall(cudaMemcpy(keyToIndexMap_dc, keyToIndexMap, 256, cudaMemcpyHostToDevice));
+    CudaSafeCall(cudaMalloc((void **)&keyToIndexMap_dc, 256*sizeof(int)));
+    CudaSafeCall(cudaMemcpy(keyToIndexMap_dc, keyToIndexMap, 256*sizeof(int), cudaMemcpyHostToDevice));
 
     
     bool keyFound = false;
@@ -969,11 +971,14 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
 
 			for (int i=1; i<nrKeys+1;i++) {
 				if (result[i]) {
-					printf("Key found:\r\n");
-					for (int j=0; j<KEY_SIZE; j++) {
-						printf("%c", keys[(KEY_SIZE)*(i-1)+j]); // -1 as 0 index is reserved to store if result was found at all
+
+					if (!supressOutput) {
+						printf("Key found:\r\n");
+						for (int j = 0; j < KEY_SIZE; j++) {
+							printf("%c", keys[(KEY_SIZE)*(i - 1) + j]); // -1 as 0 index is reserved to store if result was found at all
+						}
+						printf("\r\n");
 					}
-					printf("\r\n");
 					keyFound = true;
 				}
 			}
@@ -1001,13 +1006,28 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
 				lastPrintedPercentRange = currentRange;
 				lastPrintedPercentTotal = currentTotal;
 
-				cout << lastPrintedPercentRange << "% of Job calculated, that's " << lastPrintedPercentTotal << "% of the whole key range" << endl;
+				if (!supressOutput) cout << lastPrintedPercentRange << "% of Job calculated, that's " << lastPrintedPercentTotal << "% of the whole key range" << endl;
 			}
 //		}
 		    
-    } while (!keyFound &&  keysCalculated<keysInTotalToCalculate);
+    } while (!keyFound &&  keysCalculated<keysInTotalToCalculate && !(*shutdownRequested));
 
-       
+	if (*shutdownRequested){
+		CudaSafeCall(cudaMemcpy((uint8_t *)keys, keys_dc, (KEY_SIZE)*nrKeys, cudaMemcpyDeviceToHost));
+
+		char* currentKey = keys;
+		unsigned long long prevKeyIdx = 0;
+
+		for (unsigned long i = 0; i < nrKeys; i++){
+			unsigned long long keyIdx = calculateIndexFrom16ByteKey(currentKey);
+			cout << (keyIdx-prevKeyIdx) << endl;
+			prevKeyIdx = keyIdx;
+			currentKey += KEY_SIZE;
+		}			
+		cout << endl;
+	}
+
+
 	// Free device global memory
 
 	CudaSafeCall(cudaFree(keyChars_dc));
@@ -1020,9 +1040,10 @@ void tryKeysGPUMultiShot(unsigned int nrBlocks,
 	CudaSafeCall(cudaFree(verifbuf_test_dc));  
 
 	free(verificationBuffer_hc);
-    free(verificationBuffer);
     free(keys);
 	free(result);
+
+	return keyFound;
 }
 
 
@@ -1031,6 +1052,7 @@ void measureGPUPerformance(unsigned int nrBlocks,
 				unsigned long long keysBeforeContextSwitch, 
 				unsigned long long *nrKeysCalculatedResult,
 				unsigned long long *nrOfSecondsInTotalMeasured,
+				bool* shutdownRequested,
 				int nrSecondsToMeasure = 30) {
     
     uint8_t *verificationBuffer_hc;
@@ -1133,8 +1155,8 @@ void measureGPUPerformance(unsigned int nrBlocks,
 
     CudaSafeCall(cudaMalloc((void **)&keyChars_dc, sizeof(keyChars)));
     CudaSafeCall(cudaMemcpy(keyChars_dc, keyChars, sizeof(keyChars), cudaMemcpyHostToDevice));
-    CudaSafeCall(cudaMalloc((void **)&keyToIndexMap_dc, 256));
-    CudaSafeCall(cudaMemcpy(keyToIndexMap_dc, keyToIndexMap, 256, cudaMemcpyHostToDevice));
+    CudaSafeCall(cudaMalloc((void **)&keyToIndexMap_dc, 256*sizeof(int)));
+    CudaSafeCall(cudaMemcpy(keyToIndexMap_dc, keyToIndexMap, 256*sizeof(int), cudaMemcpyHostToDevice));
 
 
 
@@ -1195,7 +1217,7 @@ void measureGPUPerformance(unsigned int nrBlocks,
 		boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();  
 		duration = (now-beginTs);
 
-    } while (!(duration.total_seconds()>nrSecondsToMeasure));
+	} while (!(duration.total_seconds()>nrSecondsToMeasure) && !(*shutdownRequested));
 
 		
 	

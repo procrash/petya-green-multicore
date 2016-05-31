@@ -229,7 +229,7 @@ void tryKey(unsigned int threadNr,
 					for (int i=0; i<8; i++) {
 						int idx = keyToIndexMap[(char)key[posToKey[i]]];
 						idx++;
-						idx %=sizeof(keyChars);
+						idx %=(2*26+10);
 						key[posToKey[i]] = keyChars[idx];
 
 						if (idx!=0) break;
@@ -260,6 +260,7 @@ void tryKey(unsigned int threadNr,
 void measureCPUPerformance(unsigned long long nrOfThreads,
 									unsigned long long *nrKeysCalculatedResult,
 									unsigned long long *nrOfSecondsInTotalMeasured,
+									bool* shutdownRequested,
 									unsigned long long nrSecondsToMeasure = 30) {
 
 
@@ -351,7 +352,7 @@ void measureCPUPerformance(unsigned long long nrOfThreads,
 		duration = (now-beginTs);
 
 		boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
-	} while (!(duration.total_seconds()>nrSecondsToMeasure));
+	} while (!(duration.total_seconds()>nrSecondsToMeasure) && !(*shutdownRequested));
 
     threadShutdownRequested = true;
 
