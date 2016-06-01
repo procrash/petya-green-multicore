@@ -12,28 +12,6 @@ In contrast to the original project I tried to improve the program in the follow
 
 The GPU code is running and your keys are computed in less than three days on a Nvidia 980Ti graphics card. 
 
-AGE: petya_green [] [--help] [--version] [--gpu] [--cpu] [--resume] [--random] [--selftest] [--performance] [--queryDeviceInfo] [--file ARG] [--key ARG] [--cpu_threads ARG] [--gpu_threads ARG] [--gpu_blocks ARG] [--gpu_keysCtxSwitch ARG] [--start_key ARG] [--nrOfKeysToCalculate ARG] 
-
-Option Arguments: 
-	--help              	display help message
-	--version           	output the version number
-	--file              	filename which contains disk dump of crypted harddrive (does only need to be the first 57 sectors)
-	--gpu               	keys are calculated on gpu (notice if you specify both option gpu and cpu is used to calculute the keys)
-	--cpu               	keys are calculated on cpu
-	--resume            	resume previous calculation
-	--random            	use a random key instead of brute force mothod, notice this doesn't allow a resume as wrong keys are not stored
-	--key               	try a specific key
-	--selftest          	check if algorithms work
-	--performance       	provide information about performance
-	--cpu_threads       	nr of threads to use on CPU for CPU calculation
-	--queryDeviceInfo   	Displays information about NVIDIA devices
-	--gpu_threads       	number of threads to use on GPU
-	--gpu_blocks        	number of blocks to use on GPU
-	--gpu_keysCtxSwitch 	number keys which are calculated on a the gpu before the context switches back to host
-	--start_key         	start key number (defaults to 0)
-	--nrOfKeysToCalculate	nr of keys which should be calculated before program ends [defaults to all key combinations (2*26+10)^8]
-
-
 1) If you have a key and you want to test it:<br/>
 <pre>
 ./petya_green [disk dump] [key]
@@ -76,9 +54,12 @@ nonce:
 ---
 Please wait, searching key is in progress...
 </pre>
-<pre>
-Ctrl+C interrupts the key calculation.
-
-If you want to resume it type:
+3) Ctrl+C interrupts the key calculation.
+4) If you want to resume it type:
+</pre>
 ./petya_green --resume
+</pre>
+5) You can check the performance of your system and settings with
+<pre>
+./petya_green --performance
 </pre>
