@@ -56,7 +56,7 @@ Please wait, searching key is in progress...
 </pre>
 3) Ctrl+C interrupts the key calculation.
 If you want to resume it type:
-</pre>
+<pre>
 ./petya_green --resume
 </pre>
 4) You can check the performance of your system and settings with
