@@ -1,9 +1,7 @@
 # petya_green
-Application for random attack on Green Petya's key
+Application for a brute force attack on Green Petya's key
 -
-<b>WARNING!</b> This is just an experiment! 
-Efficiency of this application is much, much lower than the previous solution (for Red Petya).
-I am making it available for the people who want to participate in the experiment of unlocking Green Petya - due to the fact that the previous solution does not work at all.
+<b>This version works for the new updated green petya ransomware</b>
 
 I forked this off from https://github.com/hasherezade/petya_green as the project seemed to only use one CPU core. 
 
@@ -12,22 +10,37 @@ In contrast to the original project I tried to improve the program in the follow
 - Use the GPU to compute the keys
 - Instead of trying a random key I try to search the whole key space whileas several threads handle different key space divisions independently
 
-However, the code is still under heavy development and definitely needs some cleanup and further improvements.
-The GPU code is running now but it lacks on performance. As I just started with CUDA I still don't know yet how to achieve further performance.
+The GPU code is running and your keys are computed in less than three days on a Nvidia 980Ti graphics card. 
 
-I also don't know if the code that I've written contains some errors. So if somebody of you has a clue where to get a fresh petya-green malware I'd like to have a copy to check if the code is working
-Drop me a mail with a link where I can pull it (don't send it please) to p r o c r a s h at n e u s o b dot de.
+AGE: petya_green [] [--help] [--version] [--gpu] [--cpu] [--resume] [--random] [--selftest] [--performance] [--queryDeviceInfo] [--file ARG] [--key ARG] [--cpu_threads ARG] [--gpu_threads ARG] [--gpu_blocks ARG] [--gpu_keysCtxSwitch ARG] [--start_key ARG] [--nrOfKeysToCalculate ARG] 
 
-Or even better if you know a key and have an encrypted sector available this would even be better. 
+Option Arguments: 
+	--help              	display help message
+	--version           	output the version number
+	--file              	filename which contains disk dump of crypted harddrive (does only need to be the first 57 sectors)
+	--gpu               	keys are calculated on gpu (notice if you specify both option gpu and cpu is used to calculute the keys)
+	--cpu               	keys are calculated on cpu
+	--resume            	resume previous calculation
+	--random            	use a random key instead of brute force mothod, notice this doesn't allow a resume as wrong keys are not stored
+	--key               	try a specific key
+	--selftest          	check if algorithms work
+	--performance       	provide information about performance
+	--cpu_threads       	nr of threads to use on CPU for CPU calculation
+	--queryDeviceInfo   	Displays information about NVIDIA devices
+	--gpu_threads       	number of threads to use on GPU
+	--gpu_blocks        	number of blocks to use on GPU
+	--gpu_keysCtxSwitch 	number keys which are calculated on a the gpu before the context switches back to host
+	--start_key         	start key number (defaults to 0)
+	--nrOfKeysToCalculate	nr of keys which should be calculated before program ends [defaults to all key combinations (2*26+10)^8]
 
-<b>USAGE</b><br/>
+
 1) If you have a key and you want to test it:<br/>
 <pre>
 ./petya_green [disk dump] [key]
 </pre>
 Example:
 <pre>
-./petya_green disk_fragment.bin nGuJGbmDuVN9XmLa
+./petya_green --key nGuJGbmDuVN9XmLa disk_fragment.bin 
 [+] Petya bootloader detected!
 [+] Petya http address detected!
 [+] Petya FOUND on the disk!
@@ -44,13 +57,13 @@ decoded data:
 
 [+] nGuJGbmDuVN9XmLa is a valid key
 </pre>
-2) If you don't have a key and you want to search it:
+2) If you don't have a key and you want to search it add either --cpu or --gpu in the command line options:
 <pre>
 ./petya_green [disk dump] [key]
 </pre>
 Example:
 <pre>
-./petya_green disk_fragment.bin
+./petya_green disk_fragment.bin --gpu
 [+] Petya bootloader detected!
 [+] Petya http address detected!
 [+] Petya FOUND on the disk!
@@ -61,6 +74,11 @@ verification data:
 nonce:
 07 0c 12 f6 79 28 73 cb 
 ---
-The key will be random!
 Please wait, searching key is in progress...
+</pre>
+<pre>
+Ctrl+C interrupts the key calculation.
+
+If you want to resume it type:
+./petya_green --resume
 </pre>
