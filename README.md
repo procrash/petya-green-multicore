@@ -55,11 +55,11 @@ nonce:
 Please wait, searching key is in progress...
 </pre>
 3) Ctrl+C interrupts the key calculation.
-4) If you want to resume it type:
+If you want to resume it type:
 </pre>
 ./petya_green --resume
 </pre>
-5) You can check the performance of your system and settings with
+4) You can check the performance of your system and settings with
 <pre>
 ./petya_green --performance
 </pre>
