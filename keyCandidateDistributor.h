@@ -7,7 +7,7 @@
 
 // -- 16 Byte Key funtions...
 
-inline void calculate16ByteKeyFromIndex(unsigned long long index, char*key) {
+inline void calculate16ByteKeyFromIndex(uint64_t index, char*key) {
 	// cc??cc??cc??cc??
 
 	char keyChars[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -21,7 +21,7 @@ inline void calculate16ByteKeyFromIndex(unsigned long long index, char*key) {
 		int characterNumber = index % (26*2+10);
 		key[posToKey[i]] = keyChars[characterNumber];
 		//std::cout << "remainder: " <<  index % (26*2+10) << index << std::endl;
-		index /= (26*2+10);
+		index /= (uint64_t)(26*2+10);
 	}
 
 	// key[16] = 0;
@@ -33,10 +33,10 @@ inline void calculate16ByteKeyFromIndex(unsigned long long index, char*key) {
 }
 
 
-inline unsigned long long calculateIndexFrom16ByteKey(char*key) {
+inline uint64_t calculateIndexFrom16ByteKey(char*key) {
 	// cc??cc??cc??cc??
 
-	unsigned long long resultIndex = 0;
+	uint64_t resultIndex = 0;
 
 	char keyChars[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	//                           1123456789213456789312345678941234567895123456789612
@@ -45,23 +45,23 @@ inline unsigned long long calculateIndexFrom16ByteKey(char*key) {
 
 	for (int i=0; i<255;i++) {
 		charToKeyCharsIndex[i] = 0;
-		for (int j=0; j<sizeof(keyChars); j++) {
+		for (int j=0; j<(2*26+10); j++) {
 			if (keyChars[j]==(char)i) charToKeyCharsIndex[(char)i] = j;
 		}
 	}
 
-	int posToKey[] = {13,12,9,8,5,4,1,0};
+    //int posToKey[] = {13,12,9,8,5,4,1,0};
+	int posToKey[] = {0,1,4,5,8,9,12,13}; //13,12,9,8,5,4,1,0};
 
 
 
 	for (int i=0; i<8; i++) {
 		char c = key[posToKey[i]];
-		unsigned long long idx = charToKeyCharsIndex[c];
+		uint64_t idx = charToKeyCharsIndex[c];
 
-		unsigned long long tmp = idx*pow((2*26+10),i);;
-
+		resultIndex*=(2*26+10);
+		resultIndex +=  idx;
 		// std::cout << idx << " " << tmp << std::endl;
-		resultIndex +=  tmp;
 	}
 	return resultIndex;
 }

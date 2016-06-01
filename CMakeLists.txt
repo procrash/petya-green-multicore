@@ -11,6 +11,7 @@ set (hdrs
     keyCandidateDistributor.h
     cpu_code.h
     globals.h
+    xmlStore.h
     )
 
 set (srcs

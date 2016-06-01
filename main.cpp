@@ -28,6 +28,8 @@
 #include "salsa20.h"
 #include "petya.h"
 
+#include "xmlStore.h"
+
 #define VERBOSE 0
 
 
@@ -38,7 +40,7 @@ using namespace std;
 
 bool shutdownRequested = false;
 
-unsigned long long nrOfKeysSearched = 0;
+uint64_t nrOfKeysSearched = 0;
 char* veribuf;
 char* nonce;
 
@@ -109,12 +111,12 @@ void setupSignalHandler() {
 
 }
 
-void printTimeEstimation(unsigned long long keysCalculated, unsigned long long nrOfSecondsInTotalMeasured) {
-	unsigned long long totalSecondsToCalculateAllKeys = (pow(2*26+10,8) / keysCalculated)*nrOfSecondsInTotalMeasured;
-	unsigned long long years = totalSecondsToCalculateAllKeys /60/60/24/365;
-	unsigned long long days = (totalSecondsToCalculateAllKeys /60/60/24)-years*365;
-	unsigned long long hours = (totalSecondsToCalculateAllKeys /60/60)-(years*365*24+days*24);
-	unsigned long long minutes = (totalSecondsToCalculateAllKeys /60)-(years*365*24*60+days*24*60+hours*60);
+void printTimeEstimation(uint64_t keysCalculated, uint64_t nrOfSecondsInTotalMeasured) {
+	uint64_t totalSecondsToCalculateAllKeys = (pow(2*26+10,8) / keysCalculated)*nrOfSecondsInTotalMeasured;
+	uint64_t years = totalSecondsToCalculateAllKeys /60/60/24/365;
+	uint64_t days = (totalSecondsToCalculateAllKeys /60/60/24)-years*365;
+	uint64_t hours = (totalSecondsToCalculateAllKeys /60/60)-(years*365*24+days*24);
+	uint64_t minutes = (totalSecondsToCalculateAllKeys /60)-(years*365*24*60+days*24*60+hours*60);
 
 	std::cout << years << " years" << endl;
 	std::cout << days << " days" << endl;
@@ -131,9 +133,11 @@ void checkShutdownRequested(){
 	}
 }
 
+
+
 int main(int argc, char *argv[])
 {
-	unsigned long long totalKeyRange = 2 * 26 + 10;
+	uint64_t totalKeyRange = 2 * 26 + 10;
 	
 	for (int i = 0; i < 7; i++) {
 		totalKeyRange *= 2 * 26 + 10;
@@ -165,20 +169,21 @@ int main(int argc, char *argv[])
 
 	po::options_description optionalGPU("Optional GPU Arguments");
 	optionalGPU.add_options()
-		("gpu_threads", po::value<unsigned int>()->default_value(1024), "number of threads to use on GPU")
-	    ("gpu_blocks", po::value<unsigned int>()->default_value(1), "number of blocks to use on GPU")
-	    ("gpu_keysCtxSwitch", po::value<unsigned long long>()->default_value(10000), "number keys which are calculated on a the gpu before the context switches back to host")
+		("queryDeviceInfo", "Displays information about NVIDIA devices")
+		("gpu_threads", po::value<uint64_t>()->default_value(1024), "number of threads to use on GPU")
+	    ("gpu_blocks", po::value<uint64_t>()->default_value(1), "number of blocks to use on GPU")
+	    ("gpu_keysCtxSwitch", po::value<uint64_t>()->default_value(10000), "number keys which are calculated on a the gpu before the context switches back to host")
 	;
 
 	po::options_description optionalCPU("Optional GPU Arguments");
 	optionalCPU.add_options()
-	    ("cpu_threads", po::value<unsigned int>()->default_value(10), "nr of threads to use on CPU for CPU calculation")
+	    ("cpu_threads", po::value<uint64_t>()->default_value(10), "nr of threads to use on CPU for CPU calculation")
 	;
 
 	po::options_description optionalGeneric("Optional Generic Arguments");
 	optionalGeneric.add_options()
-		("start_key", po::value<unsigned long long>()->default_value(0), "start key number (defaults to 0)")
-	    ("nrOfKeysToCalculate", po::value<unsigned long long>()->default_value(totalKeyRange), "nr of keys which should be calculated before program ends [defaults to all key combinations (2*26+10)^8]")
+		("start_key", po::value<uint64_t>()->default_value(0), "start key number (defaults to 0)")
+	    ("nrOfKeysToCalculate", po::value<uint64_t>()->default_value(totalKeyRange), "nr of keys which should be calculated before program ends [defaults to all key combinations (2*26+10)^8]")
 	;
 
 	po::positional_options_description positionalOptions;
@@ -198,6 +203,51 @@ int main(int argc, char *argv[])
 
 		po::notify(vm);
 
+
+		petya_decryptor_settings settings;
+
+		uint64_t resumeKeyNumber = -1;
+		uint64_t calculatedKeyBlockSize = -1;
+		if (vm.count("resume")) {
+			settings.load("settings.xml");
+
+			resumeKeyNumber = settings.resume_keyNr;
+			calculatedKeyBlockSize = settings.calculatedKeyBlockSize;
+		} else {
+
+			cout << "File count is "<< vm.count("file") << endl;
+
+			if (vm.count("file")) {
+				settings.m_file= vm["file"].as<string>();
+			}
+
+			if (vm.count("start_key")) {
+				settings.start_keyNr = vm["start_key"].as<uint64_t>();
+			}
+
+			if (vm.count("nrOfKeysToCalculate")) {
+				settings.nrOfKeysToCalculate = vm["nrOfKeysToCalculate"].as<uint64_t>();
+			}
+
+			if (vm.count("gpu_blocks")) {
+				settings.gpu_blocks = vm["gpu_blocks"].as<uint64_t>();
+			}
+
+			if (vm.count("gpu_threads")) {
+				settings.gpu_threads = vm["gpu_threads"].as<uint64_t>();
+			}
+
+			if (vm.count("cpu_threads")) {
+				settings.cpu_threads = 	vm["cpu_threads"].as<uint64_t>();
+			}
+
+			if (vm.count("gpu_keysCtxSwitch")) {
+				settings.gpu_keysCtxSwitch = vm["gpu_keysCtxSwitch"].as<uint64_t>();
+			}
+		}
+
+
+
 		if (vm.count("help")) {
 
 			rad::OptionPrinter::printStandardAppDesc(appName,
@@ -205,14 +255,26 @@ int main(int argc, char *argv[])
 															 commandLineOptions,
 															 &positionalOptions);
 
+			io_service.stop();
+
+
 			return 1;
 		}
 
 		if (vm.count("version")) {
 			cout << appName << " Version 1.0" << endl;
+			io_service.stop();
+
 			return 0;
 		}
 
+		if (vm.count("queryDeviceInfo")) {
+			queryDeviceInfo();
+			io_service.stop();
+
+			return 0;
+
+		}
 		if (vm.count("performance")) {
 			cout << "There are " << pow(26*2+10,8) << " candidates to try." << endl;
 			cout << "All keys together stored on the harddrive would take " << (unsigned int)((pow(26*2+10,8)*8)/1024/1024/1024/1024) << " terabytes of data [(2*26+10)^8*8)/1 TB]"<< endl;
@@ -220,12 +282,12 @@ int main(int argc, char *argv[])
 
 			cout << "However based upon your current selected configuration and hardware I try to do a rough time estimation for a brute force attack" << endl;
 
-			unsigned long long ctxSwitchKeys = vm["gpu_keysCtxSwitch"].as<unsigned long long>();
-			unsigned long long nrThreads = vm["gpu_threads"].as<unsigned int>();
-			unsigned long long nrBlocks = vm["gpu_blocks"].as<unsigned int>();
+			uint64_t ctxSwitchKeys = settings.gpu_keysCtxSwitch;
+			uint64_t nrThreads = settings.gpu_threads;
+			uint64_t nrBlocks = settings.gpu_blocks;
 
-			unsigned long long nrOfGPUKeysCalculated = 0;
-			unsigned long long nrOfSecondsInTotalMeasuredOnGPU =0;
+			uint64_t nrOfGPUKeysCalculated = 0;
+			uint64_t nrOfSecondsInTotalMeasuredOnGPU =0;
 
 			cout << endl;
 			cout << "Performing some tests now. This will take a up to 5 minutes..." << endl;
@@ -244,10 +306,10 @@ int main(int argc, char *argv[])
 
 			printTimeEstimation(nrOfGPUKeysCalculated, nrOfSecondsInTotalMeasuredOnGPU);
 
-			unsigned long long cpuThreads = vm["cpu_threads"].as<unsigned int>();
+			uint64_t cpuThreads = settings.cpu_threads;
 
-			unsigned long long nrOfCPUKeysCalculated = 0;
-			unsigned long long nrOfSecondsInTotalMeasuredOnCPU =0;
+			uint64_t nrOfCPUKeysCalculated = 0;
+			uint64_t nrOfSecondsInTotalMeasuredOnCPU =0;
 			measureCPUPerformance(cpuThreads, &nrOfCPUKeysCalculated, &nrOfSecondsInTotalMeasuredOnCPU, &shutdownRequested, 30);
 
 			checkShutdownRequested();
@@ -289,6 +351,7 @@ int main(int argc, char *argv[])
 			// TODO: should be equalized with durations...
 			printTimeEstimation(nrOfCPUKeysCalculated+nrOfGPUKeysCalculated, nrOfSecondsInTotalMeasuredOnCPU);
 
+			io_service.stop();
 
 			return 0;
 		}
@@ -365,8 +428,8 @@ int main(int argc, char *argv[])
 
 			printf("Performing GPU test.....");
 
-			unsigned int gpuThreads = vm["gpu_threads"].as<unsigned int>();;
-			unsigned int gpuBlocks = vm["gpu_blocks"].as<unsigned int>();;
+			unsigned int gpuThreads = settings.gpu_threads;
+			unsigned int gpuBlocks = settings.gpu_blocks;
 
 			unsigned int nrKeys = gpuThreads*gpuBlocks;
 			char *keys = (char *) malloc(nrKeys*sizeof(char)*KEY_SIZE);
@@ -392,21 +455,21 @@ int main(int argc, char *argv[])
 
 			if (gpuPassed) {
 
-				unsigned int gpuThreads = vm["gpu_threads"].as<unsigned int>();;
-				unsigned int gpuBlocks = vm["gpu_blocks"].as<unsigned int>();;
-				unsigned long long ctxSwitchKeys = vm["gpu_keysCtxSwitch"].as<unsigned long long>();
+				unsigned int gpuThreads = settings.gpu_threads;
+				unsigned int gpuBlocks = settings.gpu_blocks;
+				uint64_t ctxSwitchKeys = settings.gpu_keysCtxSwitch;
 
 				unsigned int nrKeys = gpuThreads*gpuBlocks;
 				char *keys = (char *)malloc(nrKeys*sizeof(char)*KEY_SIZE);
 				bool *result = (bool *)malloc(nrKeys*sizeof(bool)*KEY_SIZE);
 
-				unsigned long long startKey = vm["start_key"].as<unsigned long long>();
-				unsigned long long nrOfKeysToCalculate = vm["nrOfKeysToCalculate"].as<unsigned long long>();
+				uint64_t startKey = settings.start_keyNr;
+				uint64_t nrOfKeysToCalculate = settings.nrOfKeysToCalculate;
 
-				unsigned int currentKeyIndex = startKey;
+				uint64_t currentKeyIndex = startKey;
 				char *currentKey = keys;
 
-				unsigned long long blockSize = nrOfKeysToCalculate / nrKeys;
+				uint64_t blockSize = nrOfKeysToCalculate / nrKeys;
 
 				if (blockSize == 0) blockSize = 1;
 
@@ -468,6 +531,7 @@ int main(int argc, char *argv[])
 					true,
 					&shutdownRequested);
 				
+				free(keys);
 				io_service.stop();
 
 				checkShutdownRequested();
@@ -482,13 +546,13 @@ int main(int argc, char *argv[])
 			printf("Checking key generator...");
 			srand(time(NULL));
 
-			unsigned long long randomKeyIndex;
-			unsigned long long resultKeyIndex;
+			uint64_t randomKeyIndex;
+			uint64_t resultKeyIndex;
 
 			bool checkOk = true;
-			for (unsigned long long i=0; i<10000; i++) {
+			for (uint64_t i=0; i<10000; i++) {
 				char key[17];
-				randomKeyIndex = rand() % (unsigned long long)(pow(2*26+10,8));
+				randomKeyIndex = rand() % (uint64_t)(pow(2*26+10,8));
 
 				calculate16ByteKeyFromIndex(randomKeyIndex, key);
 				resultKeyIndex = calculateIndexFrom16ByteKey(key);
@@ -508,31 +572,36 @@ int main(int argc, char *argv[])
 
 			free(nonce);
 			free(veribuf);
+			io_service.stop();
 
 			return 0;
 		}
 
 
-		if (!vm.count("file")) {
 
+
+		if (settings.m_file.empty()) {
 			rad::OptionPrinter::printStandardAppDesc(appName,
 															 std::cout,
 															 commandLineOptions,
 															 NULL ); // &positionalOptions
 
+			io_service.stop();
 
 			return -1;
 		}
 
 
 
-		string filenameStr = vm["file"].as<string>();
+		string filenameStr = settings.m_file;
 
 
 		const char* filename = filenameStr.c_str(); // argv[1];
 		FILE *fp = fopen(filename, "rb");
 		if (fp == NULL) {
 			printf("Cannot open file %s\n", filename);
+			io_service.stop();
+
 			return -1;
 		}
 
@@ -540,6 +609,8 @@ int main(int argc, char *argv[])
 			printf("[+] Petya FOUND on the disk!\n");
 		} else {
 			printf("[-] Petya not found on the disk!\n");
+			io_service.stop();
+
 			return -1;
 		}
 		veribuf = fetch_veribuf(fp);
@@ -547,6 +618,8 @@ int main(int argc, char *argv[])
 
 		if (!nonce || !veribuf) {
 			printf("Cannot fetch nonce or veribuf!\n");
+			io_service.stop();
+
 			return -1;
 		}
 		printf("---\n");
@@ -558,8 +631,7 @@ int main(int argc, char *argv[])
 		printf("---\n");
 
 
-
-
+		// User wants to try a specific key...
 		if (vm.count("key")) {
 			string keyStr = vm["key"].as<string>();
 			key = (char *)keyStr.c_str();
@@ -570,13 +642,13 @@ int main(int argc, char *argv[])
 		    } else {
 			  printf("[-] %s is NOT a valid key!\n", key);
 		    }
+   			io_service.stop();
 
 			return 0;
 		}
 
 
-		
-
+		// User wants to try out random keys...
 		if (vm.count("random")) {
 			srand(time(NULL));
 		}
@@ -590,9 +662,11 @@ int main(int argc, char *argv[])
 		}
 		else
 		if (enableCPU) {
+
+			// TODO: Legacy remove with the better implemented code...
 			vector<boost::thread> threadList;
 
-			unsigned int nrCPUThreads = vm["cpu_threads"].as<unsigned int>();
+			unsigned int nrCPUThreads = vm["cpu_threads"].as<uint64_t>();
 
 			for (unsigned int i=0; i<nrCPUThreads; i++) {
 		        cout << "Trying random key on CPU Thread "<< (i+1) << endl;
@@ -612,30 +686,40 @@ int main(int argc, char *argv[])
 		if (enableGPU) {
 			//initializeAndCalculate((uint8_t *)nonce,  veribuf);
 
-
-			unsigned int gpuThreads = vm["gpu_threads"].as<unsigned int>();;
-			unsigned int gpuBlocks = vm["gpu_blocks"].as<unsigned int>();;
-			unsigned long long ctxSwitchKeys = vm["gpu_keysCtxSwitch"].as<unsigned long long>();
+			unsigned int gpuThreads = settings.gpu_threads;
+			unsigned int gpuBlocks = settings.gpu_blocks;
+			uint64_t ctxSwitchKeys = settings.gpu_keysCtxSwitch;
 
 			unsigned int nrKeys = gpuThreads*gpuBlocks;
 			char *keys = (char *) malloc(nrKeys*sizeof(char)*KEY_SIZE);
-			bool *result = (bool *) malloc(nrKeys*sizeof(bool)*KEY_SIZE);
 
-			unsigned long long startKey = vm["start_key"].as<unsigned long long>();
-			unsigned long long nrOfKeysToCalculate = vm["nrOfKeysToCalculate"].as<unsigned long long>();
+			uint64_t startKey = settings.resume_keyNr!=-1 ? settings.resume_keyNr : settings.start_keyNr;
+			uint64_t nrOfKeysToCalculate = settings.nrOfKeysToCalculate;
 
-			unsigned int currentKeyIndex = startKey;
+			uint64_t currentKeyIndex = startKey;
 			char *currentKey = keys;
 
-			unsigned long long blockSize = nrOfKeysToCalculate / nrKeys;
-
-			if (blockSize==0) blockSize=1;
+			uint64_t blockSize = settings.calculatedKeyBlockSize!=-1 ? settings.calculatedKeyBlockSize : (nrOfKeysToCalculate / (uint64_t) nrKeys)+1;
 
 			for (int i=0; i<nrKeys; i++) {
 				calculate16ByteKeyFromIndex(currentKeyIndex, currentKey);
 				currentKey+=KEY_SIZE;
-				currentKeyIndex += nrOfKeysToCalculate / nrKeys;
+				currentKeyIndex += blockSize;
 			}
+
+
+			// Save XML before the calculation begins...
+			settings.resume_keyNr = calculateIndexFrom16ByteKey(keys);
+			settings.calculatedKeyBlockSize = blockSize;
+			settings.save("settings.xml");
+
+			cout << "Starting calculation with "<< endl;
+			cout << " Blocks....................................... " <<gpuBlocks  << endl;
+			cout << " Threads...................................... " << gpuThreads << endl;
+			cout << " Keys calculated before GPU context returns... " << ctxSwitchKeys  << endl;
+			cout << " Number of keys to calculate.................. " << nrOfKeysToCalculate << endl;
+			cout << " Calculated Key Block size.................... " << blockSize << endl;
+
 
 			tryKeysGPUMultiShot(gpuBlocks,
 								gpuThreads,
@@ -647,6 +731,16 @@ int main(int argc, char *argv[])
 								nrOfKeysToCalculate,
 								false, 
 								&shutdownRequested);
+
+
+			if (shutdownRequested) {
+				// Save XML File...
+				settings.resume_keyNr = calculateIndexFrom16ByteKey(keys);
+				settings.calculatedKeyBlockSize = blockSize;
+
+				settings.save("settings.xml");
+			}
+			free(keys);
 			io_service.stop();
 
 			checkShutdownRequested();

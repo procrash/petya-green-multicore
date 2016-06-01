@@ -10,7 +10,7 @@
 #include "petya.h"
 using namespace std;
 
-static unsigned long long keysCalculated = 0;
+static uint64_t keysCalculated = 0;
 
 
 void tryKeyRandom(int i, char *nonce, char*veribuf) {
@@ -70,17 +70,17 @@ void tryKey(unsigned int threadNr,
 		    char*nonce,
 			char*buf,
 		    char *keys,
-			unsigned long long nrOfKeys,
+			uint64_t nrOfKeys,
 		    char *keyChars,
 		    int *keyToIndexMap,
 		    bool *isValid,
-			unsigned long long *threadKeysCalculated) {
+			uint64_t *threadKeysCalculated) {
 
 //	char veribuf_test[VERIBUF_SIZE];
 
     char *currentKey = keys+threadNr*KEY_SIZE;
 
-    unsigned long long thisThreadKeysCalculated=0;
+    uint64_t thisThreadKeysCalculated=0;
     bool keyFound = false;
 
 	  uint8_t *key = ((uint8_t *)keys) + (threadNr*(KEY_SIZE));
@@ -257,11 +257,11 @@ void tryKey(unsigned int threadNr,
 
 
 
-void measureCPUPerformance(unsigned long long nrOfThreads,
-									unsigned long long *nrKeysCalculatedResult,
-									unsigned long long *nrOfSecondsInTotalMeasured,
+void measureCPUPerformance(uint64_t nrOfThreads,
+									uint64_t *nrKeysCalculatedResult,
+									uint64_t *nrOfSecondsInTotalMeasured,
 									bool* shutdownRequested,
-									unsigned long long nrSecondsToMeasure = 30) {
+									uint64_t nrSecondsToMeasure = 30) {
 
 
 	keysCalculated = 0;
@@ -299,23 +299,23 @@ void measureCPUPerformance(unsigned long long nrOfThreads,
     veribuf[14] = 0xf8;
     veribuf[15] = 0xc2;
 
-    unsigned long long nrOfKeys = nrOfThreads;
+    uint64_t nrOfKeys = nrOfThreads;
 
     char *keys = (char*)malloc(sizeof(char)*KEY_SIZE*nrOfKeys);
 
     bool veribufIsValid = false;
     bool matches = false;
 
-    unsigned long long keyBlocks = pow(26*2+10,8)/(nrOfKeys);
+    uint64_t keyBlocks = pow(26*2+10,8)/(nrOfKeys);
 
     char *currentKey = keys;
-    for (unsigned long long i=0; i<nrOfKeys;i++){
+    for (uint64_t i=0; i<nrOfKeys;i++){
     	calculate16ByteKeyFromIndex(0+i*keyBlocks, currentKey);
     	currentKey+=KEY_SIZE;
     }
 
-    unsigned long long *threadKeysCalculated = (unsigned long long *)malloc(sizeof(unsigned long long)*nrOfThreads);
-    memset(threadKeysCalculated,0, sizeof(unsigned long long)*nrOfThreads);
+    uint64_t *threadKeysCalculated = (uint64_t *)malloc(sizeof(uint64_t)*nrOfThreads);
+    memset(threadKeysCalculated,0, sizeof(uint64_t)*nrOfThreads);
 
 	vector<boost::thread> threadList;
 
@@ -328,7 +328,7 @@ void measureCPUPerformance(unsigned long long nrOfThreads,
     char keyChars[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
     int keyToIndexMap[256];
-    for (int i=0; i<sizeof(keyChars);i++) {
+    for (int i=0; i<(2*26+10);i++) {
   	  for (int j=0; j<256;j++) {
   		  if (keyChars[i]==(char)j) {
   			  keyToIndexMap[(char)j]=i;
