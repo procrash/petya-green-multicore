@@ -4,6 +4,9 @@ Original: https://github.com/alexwebr/salsa20
 #include <stdint.h>
 #include <stddef.h>
 #include "salsa20.h"
+#include <stdio.h>
+#include "util.h"
+
 
 static uint32_t rotl(uint32_t value, int shift)
 {
@@ -63,8 +66,14 @@ static void s20_hash(uint8_t seq[64])
   for (i = 0; i < 16; ++i)
     x[i] = z[i] = s20_littleendian(seq + (4 * i));
 
-  for (i = 0; i < 10; ++i)
+
+  for (i = 0; i < 10; ++i) {
     s20_doubleround(z);
+  }
+
+
+
+
 
   for (i = 0; i < 16; ++i) {
     z[i] += x[i];
@@ -88,6 +97,7 @@ static void s20_expand16(uint8_t *k,
     for (j = 0; j < 4; ++j)
       keystream[i + j] = t[i / 20][j];
 
+
   for (i = 0; i < 16; ++i) {
     keystream[4+i]  = k[i];
     keystream[44+i] = k[i];
@@ -95,6 +105,7 @@ static void s20_expand16(uint8_t *k,
   }
 
   s20_hash(keystream);
+
 }
 
 static void s20_expand32(uint8_t *k,
@@ -134,27 +145,34 @@ enum s20_status_t s20_crypt(uint8_t *key,
   uint32_t i;
 
   void (*expand)(uint8_t *, uint8_t *, uint8_t *) = NULL;
-  if (keylen == S20_KEYLEN_256)
-    expand = s20_expand32;
-  if (keylen == S20_KEYLEN_128)
+  //if (keylen == S20_KEYLEN_256)
+  //  expand = s20_expand32;
+  // if (keylen == S20_KEYLEN_128)
     expand = s20_expand16;
 
-  if (expand == NULL || key == NULL || nonce == NULL || buf == NULL)
-    return S20_FAILURE;
+  // if (expand == NULL || key == NULL || nonce == NULL || buf == NULL)
+  //  return S20_FAILURE;
+
 
   for (i = 0; i < 8; ++i)
     n[i] = nonce[i];
 
+  /*
   if (si % 64 != 0) {
     s20_rev_littleendian(n+8, si / 64);
     (*expand)(key, n, keystream);
   }
+  */
 
   for (i = 0; i < buflen; ++i) {
     if ((si + i) % 64 == 0) {
       s20_rev_littleendian(n+8, ((si + i) / 64));
+
+
       (*expand)(key, n, keystream);
+
     }
+
 
     buf[i] ^= keystream[(si + i) % 64];
   }

@@ -1,0 +1,10 @@
+This software is open source.
+
+However the following rules apply:
+
+You can use this software for you own PERSONAL use if you...
+
+- don't use it in commercial context
+- don't intent to publish the compiled executable online
+
+
