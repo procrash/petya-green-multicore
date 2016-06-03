@@ -433,7 +433,7 @@ __global__ void gpu_decryptMultiShot(uint8_t *keys,
 			  
 			  
 					char c = validationBuffer[bufPos];
-					c ^= keystream[ bufPos % 64];
+					c ^= keystream[ bufPos]; // % 64 
 					if (c!=VERIFICATION_CHAR) {
 						(isValid)[threadNr+1] = false;
 						
