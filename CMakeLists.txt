@@ -12,6 +12,8 @@ set (hdrs
     cpu_code.h
     globals.h
     xmlStore.h
+    MainApplication.h
+    MainAppFrame.h
     )
 
 set (srcs
@@ -25,6 +27,8 @@ set (srcs
     CustomOptionDescription.cpp
     OptionPrinter.cpp
     keyCandidateDistributor.cpp
+    MainApplication.cpp
+    MainAppFrame.cpp
     )
 
 #set(CMAKE_BUILD_TYPE Debug)
@@ -42,6 +46,9 @@ set(Boost_USE_MULTITHREADED ON)
 set(Boost_USE_STATIC_RUNTIME OFF) 
 find_package(Boost 1.45.0 COMPONENTS system thread program_options filesystem regex date_time) 
 find_package(CUDA QUIET REQUIRED)
+# find_package(wxWidgets COMPONENTS core base REQUIRED)
+
+include( "${wxWidgets_USE_FILE}" )
 
 if(Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIRS}) 
@@ -49,8 +56,10 @@ if(Boost_FOUND)
     target_link_libraries(petya_green 
 	${Boost_LIBRARIES}
  	${Boost_SYSTEM_LIBRARY}
+#	${wxWidgets_LIBRARIES}
 	)
 endif()
+
 
 
 #cuda_add_executable(

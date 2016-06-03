@@ -248,7 +248,38 @@ __global__ void gpu_decryptMultiShot(uint8_t *keys,
 	  int threadNr = blockDim.x * blockIdx.x + threadIdx.x;
 	  
 	  if (threadNr>=nrTotal) return;
-	  
+	  ///
+	  uint8_t keystreamCopy[64];
+	  uint8_t nCopy[16] = { 0 };
+	  uint32_t i;
+
+	  for (i = 0; i < 8; ++i)
+		nCopy[i] = nonce[i];
+
+
+//		if (bufPos % 64 == 0) {
+		  //s20_rev_littleendian(n+8, ((si + i) / 64));
+		  (nCopy+8)[0] = 0;// (bufPos / 64);
+		  (nCopy+8)[1] = 0;//(bufPos / 64)>>8;
+		  (nCopy+8)[2] = 0;//(bufPos / 64)>>16;
+		  (nCopy+8)[3] = 0;//(bufPos / 64)>>24;
+
+		  // s20_expand16(key, n, keystream);
+
+		  //int i; 
+		  int j;
+		  uint8_t t[4][4] = {
+			{ 'e', 'x', 'p', 'a' },
+			{ 'n', 'd', ' ', '1' },
+			{ '6', '-', 'b', 'y' },
+			{ 't', 'e', ' ', 'k' }
+		  };
+
+		  for (i = 0; i < 64; i += 20)
+			for (j = 0; j < 4; ++j)
+			  keystreamCopy[i + j] = t[i / 20][j];
+		  
+	  ///
 	  
 	  bool keyFound = false;
 
@@ -260,16 +291,29 @@ __global__ void gpu_decryptMultiShot(uint8_t *keys,
 
 		  
 		  uint8_t keystream[64];
-		  uint8_t n[16] = { 0 };
+		  uint8_t n[16];// = { 0 };
 		  uint32_t i;
 
+		 // cudaMemcpy(n, nCopy, 16, cudaMemcpyDeviceToDevice);
+		 // cudaMemcpy(keystream, keystreamCopy, 64, cudaMemcpyDeviceToDevice);
+
+		  for (int i=0; i<16; i++) {
+			  n[i] = nCopy[i];
+			  keystream[i] = keystreamCopy[i];
+		  }
+		  for (int i=16; i<64;i++) {
+			  keystream[i] = keystreamCopy[i];			  
+		  }
+		  
+		  uint8_t *validationBuffer;
+		  
+		  validationBuffer = buf + (threadNr*(KEY_SIZE));
+
+		  /*
 		  for (i = 0; i < 8; ++i)
 			n[i] = nonce[i];
 
 
-		  uint8_t *validationBuffer;
-		  
-		  validationBuffer = buf + (threadNr*(KEY_SIZE));
 	
 	//		if (bufPos % 64 == 0) {
 			  //s20_rev_littleendian(n+8, ((si + i) / 64));
@@ -293,6 +337,7 @@ __global__ void gpu_decryptMultiShot(uint8_t *keys,
 				for (j = 0; j < 4; ++j)
 				  keystream[i + j] = t[i / 20][j];
 
+			*/
 			  for (i = 0; i < 16; ++i) {
 				keystream[4+i]  = key[i];
 				keystream[44+i] = key[i];
