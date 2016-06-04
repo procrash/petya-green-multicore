@@ -1,7 +1,7 @@
 # petya_green
 Application for a brute force attack on Green Petya's key
 -
-<b>This version works for the new updated green petya ransomware (see tyaransomwarehilfe.wordpress.com)</b>
+<b>This version works for the new updated green petya ransomware (see petyaransomwarehilfe.wordpress.com)</b>
 
 I forked this off from https://github.com/hasherezade/petya_green as the project seemed to only use one CPU core. 
 
