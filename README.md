@@ -14,10 +14,14 @@ In contrast to the original project I tried to improve the program in the follow
 The GPU code is running and your keys are computed in less than three days on a Nvidia 980Ti graphics card. 
 
 <pre>
-Please respect the license of the source code and don't use this in a commercial context (see License.txt file). Coding takes time and effort.
-As I'm not a student anymore and I don't share the flat with my parents I want of course some money back for the development of this application.
-However I don't want to get rich of this as I don't want to behave the same way as the ransome developers. Therefore the code is open source here 
-on GitHub and is free for everybody who is able to compile this. If you are not capable of doing that but still need help contact us on
+Please respect the license of the source code and don't use this in a commercial context (see License.txt file). 
+Coding takes time and effort. As I'm not a student anymore and I don't share the flat with my parents I want 
+of course some money back for the development of this application.
+
+However I don't want to get rich of this as I don't want to behave the same way as the ransome developers. 
+Therefore the code is open source here on GitHub and is free for everybody who is able to compile this. 
+If you are not capable of doing that but still need help contact us on
+
 https://petyaransomwarehilfe.wordpress.com
 
 We're happy to help. A harddisk recovery costs 50 Euros. An engineering hour costs already more.
