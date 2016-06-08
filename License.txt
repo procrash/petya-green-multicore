@@ -7,4 +7,7 @@ You can use this software for you own PERSONAL use if you...
 - don't use it in commercial context
 - don't intent to publish the compiled executable online
 
+What means commercial context ?
+If you want to use the program self compiled for data recovery in a commercial context without using our service contact use please. (ab@irbd.eu, or rd@irbd.eu, or wolfgang.meyerle@googlemail.com)
 
+Commercial use means that you recover data of third parties with an compiled executable from the Github Code an charge money for this. If you recover your own data (e.g. for your work or your comapany that’s not a commercial context).
