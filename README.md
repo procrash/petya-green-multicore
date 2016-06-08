@@ -1,7 +1,7 @@
 # petya_green
 Application for a brute force attack on Green Petya's key
 -
-<b>This version works for the new updated green petya ransomware (see http://petyaransomwarehilfe.wordpress.com)</b>
+<b>This version works for the new updated green petya ransomware</b>
 
 I forked this off from https://github.com/hasherezade/petya_green as the project seemed to only use one CPU core. 
 
@@ -9,8 +9,19 @@ In contrast to the original project I tried to improve the program in the follow
 - Use C++ Boost to support multithreading on CPU
 - Use the GPU to compute the keys
 - Instead of trying a random key I try to search the whole key space whileas several threads handle different key space divisions independently
+- The application has a graphical user interface now.
 
 The GPU code is running and your keys are computed in less than three days on a Nvidia 980Ti graphics card. 
+
+<pre>
+Please respect the license of the source code and don't use this in a commercial context (see License.txt file). Coding takes time and effort.
+As I'm not a student anymore and I don't share the flat with my parents I want of course some money back for the development of this application.
+However I don't want to get rich of this as I don't want to behave the same way as the ransome developers. Therefore the code is open source here 
+on GitHub and is free for everybody who is able to compile this. If you are not capable of doing that but still need help contact us on
+https://petyaransomwarehilfe.wordpress.com
+
+We're happy to help. A harddisk recovery costs 50 Euros. An engineering hour costs already more.
+</pre>
 
 1) If you have a key and you want to test it:<br/>
 <pre>

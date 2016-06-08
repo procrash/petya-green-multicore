@@ -14,6 +14,7 @@ set (hdrs
     xmlStore.h
     MainApplication.h
     MainAppFrame.h
+    wxImagePanel.h
     )
 
 set (srcs
@@ -29,6 +30,7 @@ set (srcs
     keyCandidateDistributor.cpp
     MainApplication.cpp
     MainAppFrame.cpp
+    wxImagePanel.cpp
     )
 
 #set(CMAKE_BUILD_TYPE Debug)
@@ -46,7 +48,7 @@ set(Boost_USE_MULTITHREADED ON)
 set(Boost_USE_STATIC_RUNTIME OFF) 
 find_package(Boost 1.45.0 COMPONENTS system thread program_options filesystem regex date_time) 
 find_package(CUDA QUIET REQUIRED)
-# find_package(wxWidgets COMPONENTS core base REQUIRED)
+find_package(wxWidgets COMPONENTS core base REQUIRED)
 
 include( "${wxWidgets_USE_FILE}" )
 
@@ -56,7 +58,7 @@ if(Boost_FOUND)
     target_link_libraries(petya_green 
 	${Boost_LIBRARIES}
  	${Boost_SYSTEM_LIBRARY}
-#	${wxWidgets_LIBRARIES}
+	${wxWidgets_LIBRARIES}
 	)
 endif()
 

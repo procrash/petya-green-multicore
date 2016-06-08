@@ -12,7 +12,7 @@
 #include <wx/image.h>
 #include "wxImagePanel.h"
 #include <wx/wfstream.h>
-#include "gpu_code.h"
+
 #include <boost/lexical_cast.hpp>
 #include "petya.h"
 #include "keyCandidateDistributor.h"
@@ -42,10 +42,10 @@ void MainAppFrame::createSourceChoice(wxBoxSizer* vbox) {
     hboxSourceChoice->AddSpacer(10);
 
     wxArrayString arIHave;
-    arIHave.Add(wxT("connected a Petya Mischa infected harddrive to this Computer"));
+    arIHave.Add(wxT("connected a Petya Mischa infected harddrive to this Computer (not implemented yet)"));
     arIHave.Add(wxT("a disk dump file of an infected harddisk (first 56 sectors are enough)"));
-    arIHave.Add(wxT("a nonce and the verification number as hex bytes"));
-    arIHave.Add(wxT("nothing, of above, I'd like to generate an USB Stick to generate the disk dump"));
+    arIHave.Add(wxT("a nonce and the verification number as hex bytes (not implemented yet)"));
+    arIHave.Add(wxT("nothing, of above, I'd like to generate an USB Stick to generate the disk dump (not implemented yet)"));
 
     cbSourceChoice = new wxComboBox(panel, ComboBoxSourceChoice, _T(""), wxPoint(0,0), wxDefaultSize,
     		arIHave,  wxTE_PROCESS_TAB  |  wxCB_DROPDOWN | wxCB_READONLY);
@@ -424,7 +424,6 @@ void MainAppFrame::showHideChoices(bool isVisible) {
 
 
 void MainAppFrame::OnComboBoxSourceChanged(wxCommandEvent& event) {
-	cout << "Source changed"<<endl;
 
 
 	int selectedIdx = cbSourceChoice->GetSelection();
@@ -459,6 +458,11 @@ void MainAppFrame::OnComboBoxSourceChanged(wxCommandEvent& event) {
 	//Layout();
 }
 
+void MainAppFrame::calculationThread(GPUMultiShotArguments args) {
+	shutdownRequested = false;
+	tryKeysGPUMultiShot(args);
+}
+
 void MainAppFrame::OnStartCalculation(wxCommandEvent& WXUNUSED(event)) {
 	// Find GPU Parameters...
 	queryDeviceInfo(&nrBlocks, &nrThreads);
@@ -491,24 +495,24 @@ void MainAppFrame::OnStartCalculation(wxCommandEvent& WXUNUSED(event)) {
 		currentKeyIndex += blockSize;
 	}
 
-	bool shutdownRequested = false;
 
 	GPUMultiShotArguments argument;
 	argument.nrBlocks = nrBlocks;
 	argument.nrThreads = nrThreads;
-	argument.nonce_hc = (uint8_t *)nonce;
+	memcpy(argument.nonce_hc, nonce, NONCE_SIZE);
 	argument.verificationBuffer = veribuf;
 	argument.keys = keys;
 	argument.nrKeys = nrKeys;
 	argument.keysBeforeContextSwitch = ctxSwitchKeys;
 	argument.keysInTotalToCalculate = nrOfKeysToCalculate;
 	argument.supressOutput = false;
-	argument.shutdownRequested = shutdownRequested;
+	argument.shutdownRequested = &shutdownRequested;
 
+	boost::thread(&MainAppFrame::calculationThread, this, argument);
 
-	boost::thread(tryKeysGPUMultiShot, argument);
-
+	//  boost::thread(&MainAppFrame::calculationThread, argument);
 }
+
 
 
 void MainAppFrame::OnComboTabAction(wxKeyEvent& event)

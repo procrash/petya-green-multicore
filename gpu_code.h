@@ -24,6 +24,8 @@ void tryKeysGPUSingleShot(uint64_t nrBlocks,
 				uint64_t nrKeys,
 				bool *result);
 
+bool tryKeysGPUMultiShot(const GPUMultiShotArguments &argument);
+
 bool tryKeysGPUMultiShot(uint64_t nrBlocks,
 				uint64_t nrThreads,
 				uint8_t nonce_hc[8],
@@ -36,7 +38,6 @@ bool tryKeysGPUMultiShot(uint64_t nrBlocks,
 				bool* shutdownRequested);
 
 
-// bool tryKeysGPUMultiShot(GPUMultiShotArguments argument);
 
 void measureGPUPerformance(uint64_t nrBlocks,
 				uint64_t nrThreads,
@@ -44,4 +45,4 @@ void measureGPUPerformance(uint64_t nrBlocks,
 				uint64_t *nrKeysCalculatedResult,
 				uint64_t *nrOfSecondsInTotalMeasured,
 				bool* shutdownRequested,
-				int nrSecondsToMeasure = 30);
+				int nrSecondsToMeasure);

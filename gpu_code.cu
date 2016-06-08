@@ -11,6 +11,7 @@
 #include <boost/container/vector.hpp>
 
 #include "globals.h"
+#include "gpu_code.h"
 
 #define NR_THREADS 1024
 #define NR_BLOCKS 1
@@ -309,40 +310,12 @@ __global__ void gpu_decryptMultiShot(uint8_t *keys,
 		  
 		  validationBuffer = buf + (threadNr*(KEY_SIZE));
 
-		  /*
-		  for (i = 0; i < 8; ++i)
-			n[i] = nonce[i];
 
-
-	
-	//		if (bufPos % 64 == 0) {
-			  //s20_rev_littleendian(n+8, ((si + i) / 64));
-			  (n+8)[0] = 0;// (bufPos / 64);
-			  (n+8)[1] = 0;//(bufPos / 64)>>8;
-			  (n+8)[2] = 0;//(bufPos / 64)>>16;
-			  (n+8)[3] = 0;//(bufPos / 64)>>24;
-
-			  // s20_expand16(key, n, keystream);
-
-			  //int i; 
-			  int j;
-			  uint8_t t[4][4] = {
-				{ 'e', 'x', 'p', 'a' },
-				{ 'n', 'd', ' ', '1' },
-				{ '6', '-', 'b', 'y' },
-				{ 't', 'e', ' ', 'k' }
-			  };
-
-			  for (i = 0; i < 64; i += 20)
-				for (j = 0; j < 4; ++j)
-				  keystream[i + j] = t[i / 20][j];
-
-			*/
-			  for (i = 0; i < 16; ++i) {
-				keystream[4+i]  = key[i];
-				keystream[44+i] = key[i];
-				keystream[24+i] = n[i];
-			  }
+		  for (i = 0; i < 16; ++i) {
+			keystream[4+i]  = key[i];
+			keystream[44+i] = key[i];
+			keystream[24+i] = n[i];
+		  }
 
 		  // ____________________
 		  // s20_hash(keystream);
@@ -366,21 +339,21 @@ __global__ void gpu_decryptMultiShot(uint8_t *keys,
 					  // s20_quarterround(&x[0], &x[4], &x[8], &x[12]);
 
 					  z[4] =  z[4]  ^ ROTL(z[0]  + z[12], 7);
-					  z[8] =  z[8]  ^ ROTL(z[4]  + z[0], 9);
+					  z[8] =  z[8]  ^ ROTL(z[4]  + z[0],  9);
 					  z[12] = z[12] ^ ROTL(z[8]  + z[4], 13);
 					  z[0] =  z[0]  ^ ROTL(z[12] + z[8], 18);
 
 					  // s20_quarterround(&x[5], &x[9], &x[13], &x[1]);
-					  z[9] =  z[9]  ^ ROTL(z[5]  + z[1], 7);
-					  z[13] = z[13] ^ ROTL(z[9]  + z[5], 9);
-					  z[1] =  z[1]  ^ ROTL(z[13] + z[9], 13);
+					  z[9] =  z[9]  ^ ROTL(z[5]  + z[1],   7);
+					  z[13] = z[13] ^ ROTL(z[9]  + z[5],   9);
+					  z[1] =  z[1]  ^ ROTL(z[13] + z[9],  13);
 					  z[5] =  z[5]  ^ ROTL(z[1]  + z[13], 18);
 
 					  // s20_quarterround(&x[10], &x[14], &x[2], &x[6]);
-					  z[14]=  z[14] ^ ROTL(z[10] + z[6], 7);
-					  z[2] =  z[2]  ^ ROTL(z[14] + z[10], 9);
+					  z[14]=  z[14] ^ ROTL(z[10] + z[6],   7);
+					  z[2] =  z[2]  ^ ROTL(z[14] + z[10],  9);
 					  z[6] =  z[6]  ^ ROTL(z[2]  + z[14], 13);
-					  z[10] = z[10] ^ ROTL(z[6]  + z[2], 18);
+					  z[10] = z[10] ^ ROTL(z[6]  + z[2],  18);
 
 					  // s20_quarterround(&x[15], &x[3], &x[7], &x[11]);
 					  z[3] =  z[3]  ^ ROTL(z[15] + z[11], 7);
@@ -470,8 +443,8 @@ __global__ void gpu_decryptMultiShot(uint8_t *keys,
 }
 
 
-void tryKeysGPUSingleShot(unsigned int nrBlocks,
-		        unsigned int nrThreads,
+void tryKeysGPUSingleShot(uint64_t nrBlocks,
+				uint64_t nrThreads,
 				uint8_t nonce_hc[8],  
 		        char *verificationBuffer, 
 				char*keys, 
@@ -541,8 +514,27 @@ void printKeys(char*keys, uint64_t nrKeys) {
 	cout << endl;
 }
 
-bool tryKeysGPUMultiShot(unsigned int nrBlocks,
-		        unsigned int nrThreads,
+// Wrapper for Boost::Thread
+
+bool tryKeysGPUMultiShot(const GPUMultiShotArguments &argument) {
+		
+	GPUMultiShotArguments arguments2 = argument;
+	
+ 	return tryKeysGPUMultiShot(arguments2.nrBlocks,
+			arguments2.nrThreads,
+			arguments2.nonce_hc,
+			arguments2.verificationBuffer,
+			arguments2.keys,
+			arguments2.nrKeys,
+			arguments2.keysBeforeContextSwitch,
+			arguments2.keysInTotalToCalculate,
+			arguments2.supressOutput,
+			arguments2.shutdownRequested);			
+}
+
+
+bool tryKeysGPUMultiShot(uint64_t nrBlocks,
+				uint64_t nrThreads,
 				uint8_t nonce_hc[8],  
 		        char *verificationBuffer, 
 				char*keys, 
@@ -552,6 +544,7 @@ bool tryKeysGPUMultiShot(unsigned int nrBlocks,
 				bool supressOutput,
 				bool* shutdownRequested) {
     
+
 	uint64_t nrTotalKeys = pow(26*2+10,8);
 	
     uint8_t *verificationBuffer_hc;
@@ -624,6 +617,7 @@ bool tryKeysGPUMultiShot(unsigned int nrBlocks,
 	int lastPrintedPercentRange = -1;
 	int lastPrintedPercentTotal = -1;
 
+
     do {
     
 		gpu_decryptMultiShot<<<nrBlocks, nrThreads>>>(keys_dc, 
@@ -634,8 +628,11 @@ bool tryKeysGPUMultiShot(unsigned int nrBlocks,
 											 keysBeforeContextSwitch,
 											 keyChars_dc,
 											 keyToIndexMap_dc);
+
+
 		CudaCheckError();
-			
+
+
 		CudaSafeCall(cudaMemcpy(result, result_dc, sizeof(bool)*(nrKeys+1), cudaMemcpyDeviceToHost));        
 	
 		if (result[0]==true) { // If key was found at all...
@@ -657,6 +654,7 @@ bool tryKeysGPUMultiShot(unsigned int nrBlocks,
 			}
 		}
 	
+
 		// Keys for next round should have been already calculated on GPU
 		
 		// Calculate next keys for next round...
@@ -704,17 +702,23 @@ bool tryKeysGPUMultiShot(unsigned int nrBlocks,
 	free(verificationBuffer_hc);
 	free(result);
 
+	cout << (*shutdownRequested) << endl;
+	cout<< keysCalculated << endl;
+	cout<< keysInTotalToCalculate << endl;
+
+	cout << "ending number crunching"<<endl;
+
 	return keyFound;
 }
 
 
-void measureGPUPerformance(unsigned int nrBlocks,
-		        unsigned int nrThreads, 
+void measureGPUPerformance(uint64_t nrBlocks,
+				uint64_t nrThreads, 
 				uint64_t keysBeforeContextSwitch, 
 				uint64_t *nrKeysCalculatedResult,
 				uint64_t *nrOfSecondsInTotalMeasured,
 				bool* shutdownRequested,
-				int nrSecondsToMeasure = 30) {
+				int nrSecondsToMeasure) {
     
     uint8_t *verificationBuffer_hc;
     uint8_t *verifbuf_test_dc = NULL;
@@ -797,12 +801,7 @@ void measureGPUPerformance(unsigned int nrBlocks,
     }
     
 
-    /*
-    for (int i=0; i<nrKeys;i++) {
-    	cout << keys[i];
-    }
-    cout << endl;
-    */
+
     
 
     
@@ -940,7 +939,7 @@ void measureGPUPerformance(unsigned int nrBlocks,
 
 
 
-void queryDeviceInfo() {
+void queryDeviceInfo(uint64_t* nrOfBlocks, uint64_t* nrThreads) {
 	int nDevices;
 
 	  cudaGetDeviceCount(&nDevices);
@@ -971,6 +970,8 @@ void queryDeviceInfo() {
 	    cout << "  Recommended BlockSize "<< minGridSize << endl;
 	    cout << "  Recommended Threadsize "<< blockSize << endl<<endl;
 
+	    *nrOfBlocks = minGridSize;
+	    *nrThreads = blockSize;
 	    
 	  }
 }

@@ -6,6 +6,7 @@
 #include <wx/wx.h>
 #include "wxImagePanel.h"
 #include "petya.h"
+#include "gpu_code.h"
 
 enum
 {
@@ -25,6 +26,8 @@ enum
 class MainAppFrame: public wxFrame
 {
 private:
+
+	bool shutdownRequested = false;
 
     char nonce[NONCE_SIZE];
     char veribuf[VERIBUF_SIZE];
@@ -75,6 +78,7 @@ private:
 	void createNonceVeribufEnterTextChoice(wxBoxSizer* vbox);
 	void createGpuParameterChoice(wxBoxSizer *vbox);
 
+	void calculationThread(GPUMultiShotArguments args);
 
 	void showHideInfectedDisk(bool isVisible);
 	void showHideDiskDump(bool isVisible);
