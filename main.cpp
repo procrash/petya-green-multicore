@@ -135,7 +135,7 @@ void checkShutdownRequested(){
 
 
 
-int main(int argc, char *argv[])
+int mainLegacy(int argc, char *argv[])
 {
 	uint64_t totalKeyRange = 2 * 26 + 10;
 	
@@ -269,7 +269,10 @@ int main(int argc, char *argv[])
 		}
 
 		if (vm.count("queryDeviceInfo")) {
-			queryDeviceInfo();
+			uint64_t nrBlocks;
+			uint64_t nrThreads;
+
+			queryDeviceInfo(&nrBlocks, &nrThreads);
 			io_service.stop();
 
 			return 0;
